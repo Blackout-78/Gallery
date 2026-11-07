@@ -1,0 +1,240 @@
+package com.blackout.gallery.ui
+
+import android.content.ClipData
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.VerifiedUser
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
+import com.blackout.gallery.data.GalleryState
+import com.blackout.gallery.data.MediaItem
+import com.blackout.gallery.data.Prefs
+import com.blackout.gallery.data.Privacy
+import com.blackout.gallery.data.Sort
+import com.blackout.gallery.data.Trash
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/** The square search box with the sort button. */
+@Composable
+fun SearchBox(query: String, onQuery: (String) -> Unit, hint: String, showSort: Boolean = true) {
+    var menu by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp).height(48.dp)
+            .background(C.Card).border(1.dp, C.Line).padding(start = 12.dp, end = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.Search, null, tint = C.Sub, modifier = Modifier.size(20.dp))
+        Box(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+            if (query.isEmpty()) Text(hint, color = C.Sub, fontSize = 16.sp)
+            BasicTextField(
+                value = query, onValueChange = onQuery, singleLine = true,
+                textStyle = TextStyle(color = C.Text, fontSize = 16.sp), cursorBrush = SolidColor(C.Accent),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (query.isNotEmpty()) IconButton(onClick = { onQuery("") }) { Icon(Icons.Filled.Close, "Clear search", tint = C.Sub) }
+        if (showSort) Box {
+            IconButton(onClick = { menu = true }) { Icon(Icons.Filled.FilterList, "Sort", tint = C.Sub) }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                Sort.entries.forEach { s ->
+                    DropdownMenuItem(
+                        text = { Text(s.label, color = if (Prefs.sort == s) C.Accent else C.Text, fontWeight = if (Prefs.sort == s) FontWeight.SemiBold else FontWeight.Normal) },
+                        onClick = { Prefs.sort = s; menu = false },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private val TAB_ICONS = mapOf(
+    "Photos" to Icons.Outlined.Image, "Albums" to Icons.Outlined.Folder,
+    "Favorites" to Icons.Outlined.FavoriteBorder, "Settings" to Icons.Outlined.Settings,
+)
+
+/** The rounded bar at the bottom: Photos, Albums, Favorites, Settings. */
+@Composable
+fun TabBar(current: String, onTab: (String) -> Unit) {
+    Row(
+        Modifier.navigationBarsPadding().padding(start = 12.dp, end = 12.dp, bottom = 12.dp).fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp)).background(C.Card).padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceAround,
+    ) {
+        Prefs.TABS.forEach { tab ->
+            val on = tab == current
+            Column(
+                Modifier.widthIn(min = 64.dp).clip(RoundedCornerShape(16.dp)).clickable { onTab(tab) }.padding(vertical = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(TAB_ICONS.getValue(tab), null, tint = if (on) C.Accent else C.Sub)
+                Text(tab, fontSize = 11.sp, color = if (on) C.Accent else C.Sub, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium)
+            }
+        }
+    }
+}
+
+/** Top bar while picking: count, Select all, Whole album. */
+@Composable
+fun SelectTopBar(selection: Selection, visible: List<MediaItem>) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 12.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        IconButton(onClick = { selection.clear() }) { Icon(Icons.Filled.Close, "Stop picking", tint = C.Text) }
+        Text("${selection.ids.size} selected", color = C.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        SquareButton("Select all") { selection.ids = visible.map { it.id }.toSet() }
+        SquareButton("Whole album") {
+            val albums = GalleryState.items.filter { it.id in selection.ids }.map { it.albumId }.toSet()
+            selection.ids = selection.ids + GalleryState.items.filter { it.albumId in albums }.map { it.id }
+        }
+    }
+}
+
+@Composable
+fun SquareButton(text: String, onClick: () -> Unit) {
+    Box(
+        Modifier.height(36.dp).background(C.Card).border(1.dp, C.Line).clickable(onClick = onClick).padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) { Text(text, color = C.Text, fontSize = 14.sp) }
+}
+
+/** Bottom bar while picking: Share, Clean info, Favorite, Delete. */
+@Composable
+fun SelectBottomBar(selection: Selection) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    fun picked() = GalleryState.items.filter { it.id in selection.ids }
+    Row(
+        Modifier.fillMaxWidth().background(C.Card).navigationBarsPadding().padding(top = 12.dp, bottom = 14.dp),
+        horizontalArrangement = Arrangement.SpaceAround,
+    ) {
+        BarAction(Icons.Outlined.Share, "Share") { scope.launch { Actions.share(context, picked()) } }
+        BarAction(Icons.Outlined.VerifiedUser, "Clean info", tint = C.Accent) {
+            scope.launch { if (Actions.clean(context, picked())) selection.clear() }
+        }
+        val allFav = selection.ids.isNotEmpty() && selection.ids.all { Prefs.isFavorite(it) }
+        BarAction(if (allFav) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder, if (allFav) "Unfavorite" else "Favorite") {
+            Prefs.toggleFavorites(selection.ids)
+        }
+        BarAction(Icons.Outlined.Delete, "Delete") { scope.launch { if (Actions.delete(context, picked())) selection.clear() } }
+    }
+}
+
+@Composable
+fun BarAction(icon: ImageVector, label: String, tint: androidx.compose.ui.graphics.Color = C.Text, onClick: () -> Unit) {
+    Column(
+        Modifier.widthIn(min = 64.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, null, tint = tint)
+        Spacer(Modifier.height(4.dp))
+        Text(label, color = tint, fontSize = 12.sp)
+    }
+}
+
+/** What the buttons do. Each shows a short message when it's done. */
+object Actions {
+    private fun say(context: Context, text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+
+    /** Shares cleaned copies only. The originals never leave with their hidden info. */
+    suspend fun share(context: Context, items: List<MediaItem>) {
+        if (items.isEmpty()) return
+        say(context, if (items.size == 1) "Removing hidden info…" else "Removing hidden info from ${items.size} items…")
+        val files = withContext(Dispatchers.IO) { items.mapNotNull { Privacy.shareCopy(context, it) } }
+        if (files.isEmpty()) { say(context, "Couldn't make a clean copy to share"); return }
+        if (files.size < items.size) say(context, "${items.size - files.size} couldn't be cleaned and were left out")
+        val uris = ArrayList<Uri>(files.map { FileProvider.getUriForFile(context, "${context.packageName}.files", it) })
+        val videos = items.count { it.isVideo }
+        val type = when (videos) { 0 -> "image/*"; items.size -> "video/*"; else -> "*/*" }
+        val send = if (uris.size == 1) {
+            Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uris[0])
+        } else {
+            Intent(Intent.ACTION_SEND_MULTIPLE).putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+        }
+        send.type = type
+        send.clipData = ClipData.newUri(context.contentResolver, "Shared", uris[0]).apply { uris.drop(1).forEach { addItem(ClipData.Item(it)) } }
+        send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        context.startActivity(Intent.createChooser(send, "Share"))
+    }
+
+    /** Removes hidden info from the photos themselves. Returns true when done. */
+    suspend fun clean(context: Context, items: List<MediaItem>): Boolean {
+        if (items.isEmpty()) return false
+        if (items.all { it.isVideo }) { say(context, "Videos are cleaned automatically when you share them"); return false }
+        val r = Privacy.cleanPhotos(context, items) ?: run { say(context, "Not changed — permission wasn't given"); return false }
+        val parts = buildList {
+            if (r.cleaned > 0) add("Cleaned ${r.cleaned} photo${if (r.cleaned == 1) "" else "s"}")
+            if (r.copies > 0) add("saved ${r.copies} clean cop${if (r.copies == 1) "y" else "ies"} in Gallery Clean")
+            if (r.skippedVideos > 0) add("${r.skippedVideos} video${if (r.skippedVideos == 1) "" else "s"} skipped (cleaned when shared)")
+            if (r.failed > 0) add("${r.failed} failed")
+        }
+        say(context, parts.joinToString(", "))
+        GalleryState.refreshSoon(context)
+        return true
+    }
+
+    /** Moves to the app's trash. Returns true when done. */
+    suspend fun delete(context: Context, items: List<MediaItem>): Boolean {
+        if (items.isEmpty()) return false
+        val n = Trash.moveIn(context, items)
+        when {
+            n < 0 -> say(context, "Not deleted")
+            n == 0 -> say(context, "Couldn't move to Trash")
+            else -> say(context, "Moved $n to Trash · kept ${Prefs.trashDays} days")
+        }
+        GalleryState.refresh(context)
+        return n > 0
+    }
+}
