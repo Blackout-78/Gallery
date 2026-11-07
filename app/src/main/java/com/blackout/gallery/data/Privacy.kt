@@ -99,7 +99,7 @@ object Privacy {
         }
     }
 
-    data class CleanResult(val cleaned: Int, val copies: Int, val skippedVideos: Int, val failed: Int)
+    data class CleanResult(val cleaned: Int, val copies: Int, val skippedVideos: Int, val failed: Int, val error: String?)
 
     /** Removes hidden info from the photos themselves. Videos are cleaned when you share them. */
     suspend fun cleanPhotos(context: Context, items: List<MediaItem>): CleanResult? {
@@ -108,15 +108,12 @@ object Privacy {
         val inPlace = photos.filter { canEditInPlace(it) }
         if (!MediaAccess.allowWrite(context, inPlace.map { it.uri })) return null
         var cleaned = 0; var copies = 0; var failed = 0
+        var error: String? = null
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             for (item in photos) {
-                val ok = runCatching {
+                val result = runCatching {
                     if (canEditInPlace(item)) {
-                        context.contentResolver.openFileDescriptor(original(context, item.uri), "rw")!!.use { pfd ->
-                            val exif = ExifInterface(pfd.fileDescriptor)
-                            ALL_TAGS.forEach { exif.setAttribute(it, null) }
-                            exif.saveAttributes()
-                        }
+                        cleanInPlace(context, item)
                         cleaned++
                     } else {
                         // Formats like HEIC can't be changed in place: save a clean JPEG copy next to it.
@@ -125,11 +122,37 @@ object Privacy {
                         bmp.recycle()
                         copies++
                     }
-                }.isSuccess
-                if (!ok) failed++
+                }
+                result.exceptionOrNull()?.let { e ->
+                    failed++
+                    if (error == null) error = (e.javaClass.simpleName + ": " + (e.message ?: "")).take(140)
+                }
             }
         }
-        return CleanResult(cleaned, copies, videos, failed)
+        return CleanResult(cleaned, copies, videos, failed, error)
+    }
+
+    /**
+     * Cleans a private copy, checks it, then writes the whole file back over the original.
+     * The original is only touched once the clean copy is ready.
+     */
+    private fun cleanInPlace(context: Context, item: MediaItem) {
+        val resolver = context.contentResolver
+        val dir = File(context.cacheDir, "clean").apply { mkdirs() }
+        val tmp = File(dir, "${System.nanoTime()}." + item.name.substringAfterLast('.', "jpg"))
+        try {
+            resolver.openInputStream(original(context, item.uri))!!.use { input -> tmp.outputStream().use { input.copyTo(it) } }
+            val exif = ExifInterface(tmp.absolutePath)
+            ALL_TAGS.forEach { exif.setAttribute(it, null) }
+            exif.saveAttributes()
+            check(tmp.length() > 0) { "clean copy is empty" }
+            val out = runCatching { resolver.openOutputStream(item.uri, "wt") }.getOrNull()
+                ?: resolver.openOutputStream(item.uri, "w")
+                ?: error("can't write to the photo")
+            out.use { o -> tmp.inputStream().use { it.copyTo(o) } }
+        } finally {
+            tmp.delete()
+        }
     }
 
     /** A copy with no hidden info, for sending to another app. Null if it couldn't be cleaned. */

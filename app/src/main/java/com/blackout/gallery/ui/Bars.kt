@@ -218,9 +218,9 @@ object Actions {
             if (r.cleaned > 0) add("Cleaned ${r.cleaned} photo${if (r.cleaned == 1) "" else "s"}")
             if (r.copies > 0) add("saved ${r.copies} clean cop${if (r.copies == 1) "y" else "ies"} in Gallery Clean")
             if (r.skippedVideos > 0) add("${r.skippedVideos} video${if (r.skippedVideos == 1) "" else "s"} skipped (cleaned when shared)")
-            if (r.failed > 0) add("${r.failed} failed")
+            if (r.failed > 0) add("${r.failed} failed (${r.error})")
         }
-        say(context, parts.joinToString(", "))
+        Toast.makeText(context, parts.joinToString(", "), if (r.failed > 0) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
         GalleryState.refreshSoon(context)
         return true
     }
