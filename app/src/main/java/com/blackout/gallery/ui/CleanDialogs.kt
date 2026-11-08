@@ -73,9 +73,11 @@ private fun ReportDialog(r: Privacy.CleanResult, onClose: () -> Unit) {
     val reports = r.reports
     val withInfo = reports.filter { it.removed.isNotEmpty() }
     val leftovers = reports.filter { it.leftover.isNotEmpty() }
+    val rebuilt = reports.count { it.rebuilt }
     val title = when {
         leftovers.isNotEmpty() -> "Check found leftovers"
         reports.isEmpty() -> "Nothing was cleaned"
+        rebuilt > 0 -> "Maximum wipe done and verified"
         withInfo.isEmpty() -> "Already clean"
         else -> "Hidden info removed"
     }
@@ -96,7 +98,11 @@ private fun ReportDialog(r: Privacy.CleanResult, onClose: () -> Unit) {
                     }
                 }
                 val clean = reports.size - withInfo.size
-                if (clean > 0) Bullet("$clean photo${if (clean == 1) " was" else "s were"} already clean", C.Sub)
+                if (clean > 0) Bullet(
+                    if (rebuilt > 0) "$clean photo${if (clean == 1) " had" else "s had"} no readable hidden info before the wipe — rebuilt anyway to remove what can't be read"
+                    else "$clean photo${if (clean == 1) " was" else "s were"} already clean",
+                    C.Sub,
+                )
                 if (reports.any { it.asCopy }) Bullet("HEIC photos: saved as clean JPEG copies next to the originals", C.Sub)
 
                 if (reports.isNotEmpty()) {
@@ -117,7 +123,7 @@ private fun ReportDialog(r: Privacy.CleanResult, onClose: () -> Unit) {
                 }
                 if (reports.any { it.scrubbed }) Bullet("✓ Sensor noise scrubbed (photo is now 90% size)", C.Good)
                 if (reports.any { r -> r.removed.any { it.detail.contains("motion photo") } }) Bullet("Motion photos: the short video part was removed with the extra data", C.Sub)
-                Text("Kept: the date the photo was taken, so it stays in place in your timeline.", color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                Text(if (rebuilt > 0) "Kept: the file's saved time, so the photo stays in place in your timeline. No date is stored inside the photo." else "Kept: the date the photo was taken, so it stays in place in your timeline.", color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
             }
         },
         confirmButton = { TextButton(onClick = onClose) { Text("OK") } },
