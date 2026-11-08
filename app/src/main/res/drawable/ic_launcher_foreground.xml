@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A picture frame with a sun and mountains. -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="5" android:strokeLineJoin="round"
-        android:pathData="M34,36h40a4,4 0 0 1 4,4v28a4,4 0 0 1 -4,4h-40a4,4 0 0 1 -4,-4v-28a4,4 0 0 1 4,-4z" />
-    <path android:fillColor="#FFFFFFFF" android:pathData="M44,49m-5,0a5,5 0 1,0 10,0a5,5 0 1,0 -10,0" />
-    <path android:fillColor="#FFFFFFFF" android:pathData="M33,69l15,-15l9,9l7,-7l13,13z" />
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="5" android:strokeLineJoin="round" android:fillColor="#00000000" android:pathData="M34,36h40a4,4 0 0 1 4,4v28a4,4 0 0 1 -4,4h-40a4,4 0 0 1 -4,-4v-28a4,4 0 0 1 4,-4z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M39,49a5,5 0 1 0 10,0a5,5 0 1 0 -10,0z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M33,69L48,54L57,63L64,56L76,68L76,69z" />
 </vector>

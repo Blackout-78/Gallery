@@ -19,6 +19,9 @@ object Prefs {
     private val _sort = mutableStateOf(Sort.Newest)
     private val _trashDays = mutableIntStateOf(30)
     private val _cleanOnEdit = mutableStateOf(true)
+    private val _iconStyle = mutableStateOf("A")
+    private val _iconMain = mutableIntStateOf(DEFAULT_ACCENT)
+    private val _iconSecond = mutableIntStateOf(0xFFFFFFFF.toInt())
     private val _favorites = mutableStateOf(emptySet<Long>())
 
     fun init(context: Context) {
@@ -30,6 +33,9 @@ object Prefs {
         _sort.value = runCatching { Sort.valueOf(sp.getString("sort", "Newest")!!) }.getOrDefault(Sort.Newest)
         _trashDays.intValue = sp.getInt("trashDays", 30)
         _cleanOnEdit.value = sp.getBoolean("cleanOnEdit", true)
+        _iconStyle.value = sp.getString("iconStyle", "A") ?: "A"
+        _iconMain.intValue = sp.getInt("iconMain", DEFAULT_ACCENT)
+        _iconSecond.intValue = sp.getInt("iconSecond", 0xFFFFFFFF.toInt())
         _favorites.value = sp.getStringSet("favorites", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet()
     }
 
@@ -54,6 +60,15 @@ object Prefs {
     var cleanOnEdit: Boolean
         get() = _cleanOnEdit.value
         set(v) { _cleanOnEdit.value = v; sp.edit().putBoolean("cleanOnEdit", v).apply() }
+    var iconStyle: String
+        get() = _iconStyle.value
+        set(v) { _iconStyle.value = v; sp.edit().putString("iconStyle", v).apply() }
+    var iconMain: Int
+        get() = _iconMain.intValue
+        set(v) { _iconMain.intValue = v; sp.edit().putInt("iconMain", v).apply() }
+    var iconSecond: Int
+        get() = _iconSecond.intValue
+        set(v) { _iconSecond.intValue = v; sp.edit().putInt("iconSecond", v).apply() }
     val favorites: Set<Long> get() = _favorites.value
 
     fun isFavorite(id: Long) = id in _favorites.value

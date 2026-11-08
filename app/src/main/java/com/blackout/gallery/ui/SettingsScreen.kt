@@ -44,6 +44,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.blackout.gallery.data.MediaAccess
+import com.blackout.gallery.settings.AppIcon
+import com.blackout.gallery.settings.IconShapes
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.asImageBitmap
 import com.blackout.gallery.data.Prefs
 import com.blackout.gallery.data.Sort
 import com.blackout.gallery.data.Trash
@@ -114,6 +121,8 @@ fun SettingsScreen(bottom: Dp) {
             SettingRow("Accent color", "Color wheel", onClick = { colorPicker = true }) { Swatch(C.Accent) }
             SettingRow("Grid size", "${Prefs.grid} per row", onClick = { choose = "grid" }, divider = false) { Text("›", color = C.Sub, fontSize = 20.sp) }
         }
+
+        Section("APP ICON") { AppIconSection() }
 
         Section("BROWSING") {
             SettingRow("Start tab", Prefs.startTab, onClick = { choose = "start" }) { Text("›", color = C.Sub, fontSize = 20.sp) }
@@ -196,4 +205,61 @@ private fun ChoiceDialog(title: String, options: List<String>, current: String, 
         },
         confirmButton = { TextButton(onClick = { onPick(current) }) { Text("Cancel") } },
     )
+}
+
+@Composable
+private fun AppIconSection() {
+    val context = LocalContext.current
+    var picker by remember { mutableStateOf<String?>(null) }
+    var applied by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        IconShapes.STYLES.keys.forEach { s ->
+            val on = Prefs.iconStyle == s
+            val bmp = remember(s, Prefs.iconMain, Prefs.iconSecond) { AppIcon.render(s, Prefs.iconMain, Prefs.iconSecond, 192).asImageBitmap() }
+            Column(
+                Modifier.clip(RoundedCornerShape(18.dp)).border(2.dp, if (on) C.Accent else Color.Transparent, RoundedCornerShape(18.dp))
+                    .clickable { Prefs.iconStyle = s; applied = false }.padding(6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Image(bmp, "Style $s", Modifier.size(58.dp).clip(CircleShape))
+                Text("$s · ${IconShapes.NAMES[s]}", color = if (on) C.Accent else C.Sub, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
+    }
+    HorizontalDivider(color = C.Line)
+    SettingRow("Main color", "Color wheel", onClick = { picker = "main" }) { Swatch(Color(Prefs.iconMain)) }
+    SettingRow("Second color", "Color wheel", onClick = { picker = "second" }) { Swatch(Color(Prefs.iconSecond)) }
+    SettingRow(
+        "Apply to app drawer",
+        if (applied) "Done. The drawer shows the closest of 428 ready-made icons." else "Closest of 428 ready-made icons",
+        onClick = {
+            AppIcon.applyDrawer(context, Prefs.iconStyle, Prefs.iconMain, Prefs.iconSecond)
+            AppIcon.pinOrUpdate(context, Prefs.iconStyle, Prefs.iconMain, Prefs.iconSecond, ask = false)
+            applied = true
+        },
+    ) { Text("›", color = C.Sub, fontSize = 20.sp) }
+    SettingRow("Add to home screen", "Exact colors. Updates by itself when you change them.", onClick = {
+        val ok = AppIcon.pinOrUpdate(context, Prefs.iconStyle, Prefs.iconMain, Prefs.iconSecond, ask = true)
+        if (!ok) android.widget.Toast.makeText(context, "Your home screen doesn't allow adding icons this way", android.widget.Toast.LENGTH_SHORT).show()
+    }, divider = false) { Text("›", color = C.Sub, fontSize = 20.sp) }
+    Text("Changing the drawer icon can remove a Gallery icon you dragged from the drawer to your home screen. Use Add to home screen instead.",
+        color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(bottom = 10.dp))
+
+    picker?.let { which ->
+        ColorPickerDialog(
+            title = if (which == "main") "Main color" else "Second color",
+            initial = if (which == "main") Prefs.iconMain else Prefs.iconSecond,
+            onPick = {
+                if (which == "main") Prefs.iconMain = it else Prefs.iconSecond = it
+                picker = null; applied = false
+                AppIcon.pinOrUpdate(context, Prefs.iconStyle, Prefs.iconMain, Prefs.iconSecond, ask = false)
+            },
+            onDismiss = { picker = null },
+            resetLabel = "Default",
+            onReset = {
+                if (which == "main") Prefs.iconMain = AppIcon.DEFAULT_MAIN else Prefs.iconSecond = AppIcon.DEFAULT_SECOND
+                picker = null; applied = false
+            },
+        )
+    }
 }
