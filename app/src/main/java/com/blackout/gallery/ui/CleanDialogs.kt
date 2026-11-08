@@ -97,7 +97,7 @@ private fun ReportDialog(r: Privacy.CleanResult, onClose: () -> Unit) {
                 }
                 val clean = reports.size - withInfo.size
                 if (clean > 0) Bullet("$clean photo${if (clean == 1) " was" else "s were"} already clean", C.Sub)
-                if (reports.any { it.asCopy }) Bullet("HEIC photos: saved as clean JPEG copies in Gallery Clean", C.Sub)
+                if (reports.any { it.asCopy }) Bullet("HEIC photos: saved as clean JPEG copies next to the originals", C.Sub)
 
                 if (reports.isNotEmpty()) {
                     Heading("Verified")
@@ -141,26 +141,26 @@ private fun ChooseLevelDialog(items: List<com.blackout.gallery.data.MediaItem>) 
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val photos = items.count { !it.isVideo }
-    // Read and saved straight from Settings, so the box always opens with your last choice.
-    val maximum = com.blackout.gallery.data.Prefs.maxWipe
-    val scrub = com.blackout.gallery.data.Prefs.scrub
+    // Not saved anywhere: the box always opens on Standard, leaving no record of past choices.
+    var maximum by remember { mutableStateOf(false) }
+    var scrub by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = { CleanUi.ask = null },
         title = { Text("Remove hidden info from $photos photo${if (photos == 1) "" else "s"}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                LevelOption("Standard", "Removes all hidden info. The picture itself isn't touched.", !maximum) { com.blackout.gallery.data.Prefs.maxWipe = false }
+                LevelOption("Standard", "Removes all hidden info. The picture itself isn't touched.", !maximum) { maximum = false }
                 LevelOption(
                     "Maximum wipe",
                     "Rebuilds each photo from its pixels and replaces the original. Also removes the hidden preview picture and the phone's compression fingerprint. Very slight quality loss.",
                     maximum,
-                ) { com.blackout.gallery.data.Prefs.maxWipe = true }
+                ) { maximum = true }
                 if (maximum) {
                     Row(
-                        Modifier.fillMaxWidth().clickable { com.blackout.gallery.data.Prefs.scrub = !scrub }.padding(start = 8.dp),
+                        Modifier.fillMaxWidth().clickable { scrub = !scrub }.padding(start = 8.dp),
                         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                     ) {
-                        androidx.compose.material3.Checkbox(checked = scrub, onCheckedChange = { com.blackout.gallery.data.Prefs.scrub = it },
+                        androidx.compose.material3.Checkbox(checked = scrub, onCheckedChange = { scrub = it },
                             colors = androidx.compose.material3.CheckboxDefaults.colors(checkedColor = C.Accent))
                         Column {
                             Text("Also scrub sensor noise", color = C.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)

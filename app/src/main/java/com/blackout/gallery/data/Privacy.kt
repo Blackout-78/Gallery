@@ -138,7 +138,7 @@ object Privacy {
                         // Formats like HEIC can't be changed in place: save a clean JPEG copy next to it.
                         step("Removing")
                         val bmp = rebuildBitmap(context, item, scrub && maximum)
-                        val copy = saveJpeg(context, bmp, item.name.substringBeforeLast('.') + "_clean.jpg", "Pictures/Gallery Clean/")
+                        val copy = saveJpeg(context, bmp, item.name.substringBeforeLast('.') + ".jpg", if (item.relPath.startsWith("DCIM/") || item.relPath.startsWith("Pictures/")) item.relPath else "Pictures/")
                         bmp.recycle()
                         step("Verifying")
                         val bytes = context.contentResolver.openInputStream(copy)?.use { it.readBytes() } ?: ByteArray(0)
@@ -174,7 +174,9 @@ object Privacy {
             val out = runCatching { resolver.openOutputStream(item.uri, "wt") }.getOrNull()
                 ?: resolver.openOutputStream(item.uri, "w")
                 ?: error("can't write to the photo")
+            val stamp = fileDate(context, item)
             out.use { o -> tmp.inputStream().use { it.copyTo(o) } }
+            keepFileDate(context, item, stamp)
         } finally {
             tmp.delete()
         }
@@ -196,9 +198,27 @@ object Privacy {
             val out = runCatching { resolver.openOutputStream(item.uri, "wt") }.getOrNull()
                 ?: resolver.openOutputStream(item.uri, "w")
                 ?: error("can't write to the photo")
+            val stamp = fileDate(context, item)
             out.use { o -> tmp.inputStream().use { it.copyTo(o) } }
+            keepFileDate(context, item, stamp)
         } finally {
             tmp.delete()
+        }
+    }
+
+    /** The file's path and "last changed" time, read before it's rewritten. */
+    private fun fileDate(context: Context, item: MediaItem): Pair<String, Long>? = runCatching {
+        context.contentResolver.query(item.uri, arrayOf("_data"), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0)?.let { path -> path to File(path).lastModified() } else null
+        }
+    }.getOrNull()
+
+    /** Puts the old "last changed" time back, so the file doesn't show it was just changed. Best effort: some phones don't allow it. */
+    private fun keepFileDate(context: Context, item: MediaItem, stamp: Pair<String, Long>?) {
+        if (stamp == null || stamp.second <= 0) return
+        runCatching {
+            File(stamp.first).setLastModified(stamp.second)
+            android.media.MediaScannerConnection.scanFile(context, arrayOf(stamp.first), null, null)
         }
     }
 

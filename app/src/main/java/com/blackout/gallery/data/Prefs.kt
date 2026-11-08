@@ -22,8 +22,6 @@ object Prefs {
     private val _iconStyle = mutableStateOf("A")
     private val _iconMain = mutableIntStateOf(DEFAULT_ACCENT)
     private val _iconSecond = mutableIntStateOf(0xFFFFFFFF.toInt())
-    private val _maxWipe = mutableStateOf(false)
-    private val _scrub = mutableStateOf(false)
     private val _shareMax = mutableStateOf(true)
     private val _shareScrub = mutableStateOf(false)
     private val _favorites = mutableStateOf(emptySet<Long>())
@@ -40,8 +38,8 @@ object Prefs {
         _iconStyle.value = sp.getString("iconStyle", "A") ?: "A"
         _iconMain.intValue = sp.getInt("iconMain", DEFAULT_ACCENT)
         _iconSecond.intValue = sp.getInt("iconSecond", 0xFFFFFFFF.toInt())
-        _maxWipe.value = sp.getBoolean("maxWipe", false)
-        _scrub.value = sp.getBoolean("scrub", false)
+        // An earlier build remembered the last clean choice. Erase it: no record is kept.
+        sp.edit().remove("maxWipe").remove("scrub").apply()
         _shareMax.value = sp.getBoolean("shareMax", true)
         _shareScrub.value = sp.getBoolean("shareScrub", false)
         _favorites.value = sp.getStringSet("favorites", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet()
@@ -77,13 +75,6 @@ object Prefs {
     var iconSecond: Int
         get() = _iconSecond.intValue
         set(v) { _iconSecond.intValue = v; sp.edit().putInt("iconSecond", v).apply() }
-    /** Last choice in the clean box: Maximum wipe, and whether to scrub sensor noise. */
-    var maxWipe: Boolean
-        get() = _maxWipe.value
-        set(v) { _maxWipe.value = v; sp.edit().putBoolean("maxWipe", v).apply() }
-    var scrub: Boolean
-        get() = _scrub.value
-        set(v) { _scrub.value = v; sp.edit().putBoolean("scrub", v).apply() }
     /** Shared copies are rebuilt from pixels with a random file name. */
     var shareMax: Boolean
         get() = _shareMax.value

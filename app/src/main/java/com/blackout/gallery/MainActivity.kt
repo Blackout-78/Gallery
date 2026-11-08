@@ -67,6 +67,17 @@ class MainActivity : ComponentActivity() {
         setContent { GalleryTheme { PermissionGate { GalleryRoot() } } }
     }
 
+    override fun onStop() {
+        super.onStop()
+        // Shared copies only need to live long enough for the other app to read them.
+        val dir = java.io.File(cacheDir, "shared")
+        Thread {
+            val cutoff = System.currentTimeMillis() - 10 * 60 * 1000
+            dir.listFiles()?.filter { it.lastModified() < cutoff }?.forEach { it.deleteRecursively() }
+            java.io.File(cacheDir, "clean").deleteRecursively()
+        }.start()
+    }
+
     override fun onResume() {
         super.onResume()
         if (hasRead(this)) GalleryState.refresh(this)
