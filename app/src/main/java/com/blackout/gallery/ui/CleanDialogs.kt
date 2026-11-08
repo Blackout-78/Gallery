@@ -141,25 +141,26 @@ private fun ChooseLevelDialog(items: List<com.blackout.gallery.data.MediaItem>) 
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val photos = items.count { !it.isVideo }
-    var maximum by remember { mutableStateOf(com.blackout.gallery.data.Prefs.maxWipe) }
-    var scrub by remember { mutableStateOf(com.blackout.gallery.data.Prefs.scrub) }
+    // Read and saved straight from Settings, so the box always opens with your last choice.
+    val maximum = com.blackout.gallery.data.Prefs.maxWipe
+    val scrub = com.blackout.gallery.data.Prefs.scrub
     AlertDialog(
         onDismissRequest = { CleanUi.ask = null },
         title = { Text("Remove hidden info from $photos photo${if (photos == 1) "" else "s"}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                LevelOption("Standard", "Removes all hidden info. The picture itself isn't touched.", !maximum) { maximum = false }
+                LevelOption("Standard", "Removes all hidden info. The picture itself isn't touched.", !maximum) { com.blackout.gallery.data.Prefs.maxWipe = false }
                 LevelOption(
                     "Maximum wipe",
                     "Rebuilds each photo from its pixels and replaces the original. Also removes the hidden preview picture and the phone's compression fingerprint. Very slight quality loss.",
                     maximum,
-                ) { maximum = true }
+                ) { com.blackout.gallery.data.Prefs.maxWipe = true }
                 if (maximum) {
                     Row(
-                        Modifier.fillMaxWidth().clickable { scrub = !scrub }.padding(start = 8.dp),
+                        Modifier.fillMaxWidth().clickable { com.blackout.gallery.data.Prefs.scrub = !scrub }.padding(start = 8.dp),
                         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                     ) {
-                        androidx.compose.material3.Checkbox(checked = scrub, onCheckedChange = { scrub = it },
+                        androidx.compose.material3.Checkbox(checked = scrub, onCheckedChange = { com.blackout.gallery.data.Prefs.scrub = it },
                             colors = androidx.compose.material3.CheckboxDefaults.colors(checkedColor = C.Accent))
                         Column {
                             Text("Also scrub sensor noise", color = C.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -172,8 +173,6 @@ private fun ChooseLevelDialog(items: List<com.blackout.gallery.data.MediaItem>) 
         },
         confirmButton = {
             TextButton(onClick = {
-                com.blackout.gallery.data.Prefs.maxWipe = maximum
-                com.blackout.gallery.data.Prefs.scrub = scrub
                 CleanUi.ask = null
                 scope.launch { Actions.runClean(context, items, maximum, maximum && scrub) }
             }) { Text(if (maximum) "Wipe" else "Remove") }
