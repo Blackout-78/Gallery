@@ -121,9 +121,13 @@ private fun ReportDialog(r: Privacy.CleanResult, onClose: () -> Unit) {
                 if (reports.any { it.rebuilt }) {
                     Bullet("✓ Rebuilt from pixels, then read back from storage byte for byte: no photo-info block, no hidden preview picture, no phone compression fingerprint", C.Good)
                 }
-                if (reports.any { it.scrubbed }) Bullet("✓ Sensor noise scrubbed (photo is now 90% size)", C.Good)
+                if (reports.any { it.scrubbed }) Bullet("✓ Sensor noise scrubbed (photo keeps its size)", C.Good)
+                val kept = reports.count { it.dateKept == true }
+                val lost = reports.count { it.dateKept == false }
+                if (kept > 0) Bullet("✓ Timeline place kept for $kept photo${if (kept == 1) "" else "s"} (date known only to your phone's photo list, not stored in the file)", C.Good)
+                if (lost > 0) Bullet("⚠ $lost photo${if (lost == 1) "" else "s"} may move to today in the timeline (Android didn't keep the date)", C.Warn)
                 if (reports.any { r -> r.removed.any { it.detail.contains("motion photo") } }) Bullet("Motion photos: the short video part was removed with the extra data", C.Sub)
-                Text(if (rebuilt > 0) "Kept: the file's saved time, so the photo stays in place in your timeline. No date is stored inside the photo." else "Kept: the date the photo was taken, so it stays in place in your timeline.", color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                Text(if (rebuilt > 0) "No date or other info is stored inside the rebuilt photos." else "Kept: the date the photo was taken, so it stays in place in your timeline.", color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
             }
         },
         confirmButton = { TextButton(onClick = onClose) { Text("OK") } },

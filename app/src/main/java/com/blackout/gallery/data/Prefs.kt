@@ -86,6 +86,15 @@ object Prefs {
 
     fun isFavorite(id: Long) = id in _favorites.value
 
+    /** Keeps the heart when a photo is replaced by its rebuilt copy. */
+    fun replaceFavorite(old: Long, new: Long) {
+        val now = _favorites.value
+        if (old !in now) return
+        val next = now - old + new
+        _favorites.value = next
+        sp.edit().putStringSet("favorites", next.map { it.toString() }.toSet()).apply()
+    }
+
     /** Hearts all of them, or un-hearts all of them if every one already has a heart. */
     fun toggleFavorites(ids: Collection<Long>) {
         val now = _favorites.value

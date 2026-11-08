@@ -103,7 +103,7 @@ object Privacy {
     }
 
     /** What happened to one photo: what was removed, and what (if anything) was still there when re-checked. */
-    data class ItemReport(val name: String, val removed: List<Row>, val leftover: List<Row>, val asCopy: Boolean, val rebuilt: Boolean = false, val scrubbed: Boolean = false)
+    data class ItemReport(val name: String, val removed: List<Row>, val leftover: List<Row>, val asCopy: Boolean, val rebuilt: Boolean = false, val scrubbed: Boolean = false, val dateKept: Boolean? = null)
     data class CleanResult(val reports: List<ItemReport>, val skippedVideos: Int, val failed: Int, val error: String?)
 
     /**
@@ -113,9 +113,12 @@ object Privacy {
     suspend fun cleanPhotos(context: Context, items: List<MediaItem>, maximum: Boolean, scrub: Boolean, onStep: (done: Int, total: Int, stage: String) -> Unit): CleanResult? {
         val photos = items.filter { !it.isVideo }
         val videos = items.size - photos.size
-        val inPlace = photos.filter { canEditInPlace(it) }
+        // Standard cleaning changes the files, so it needs "Allow change". Maximum saves new files and
+        // only asks "Allow delete" for the old ones at the end.
+        val inPlace = if (maximum) emptyList() else photos.filter { canEditInPlace(it) }
         if (!MediaAccess.allowWrite(context, inPlace.map { it.uri })) return null
         val reports = mutableListOf<ItemReport>()
+        val replacements = mutableListOf<Replacement>()
         var failed = 0
         var error: String? = null
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -126,9 +129,16 @@ object Privacy {
                     val before = read(context, item)
                     if (canEditInPlace(item) && maximum) {
                         step("Rebuilding")
-                        wipeInPlace(context, item, scrub)
-                        step("Verifying")
-                        reports += ItemReport(item.name, before, read(context, item), asCopy = false, rebuilt = true, scrubbed = scrub)
+                        val fresh = wipeAsNew(context, item, scrub)
+                        if (fresh != null) {
+                            replacements += Replacement(item, fresh, before)
+                        } else {
+                            // This folder doesn't take new files from apps: rebuild in place instead.
+                            check(MediaAccess.allowWrite(context, listOf(item.uri))) { "permission to change the photo wasn't given" }
+                            wipeInPlace(context, item, scrub)
+                            step("Verifying")
+                            reports += ItemReport(item.name, before, read(context, item), asCopy = false, rebuilt = true, scrubbed = scrub, dateKept = false)
+                        }
                     } else if (canEditInPlace(item)) {
                         step("Removing")
                         cleanInPlace(context, item)
@@ -153,7 +163,75 @@ object Privacy {
                 }
             }
         }
+        if (replacements.isNotEmpty()) {
+            onStep(photos.size - 1, photos.size, "Replacing originals")
+            // One Android "Allow delete?" question for all the old files.
+            val deleted = runCatching { MediaAccess.delete(context, replacements.map { it.item.uri }) }.getOrDefault(false)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                if (!deleted) {
+                    // Nothing changes: remove the new copies again so there are no duplicates.
+                    replacements.forEach { runCatching { context.contentResolver.delete(it.fresh, null, null) } }
+                    failed += replacements.size
+                    if (error == null) error = "Android didn't allow replacing the originals, so nothing was changed"
+                } else {
+                    replacements.forEachIndexed { i, r ->
+                        onStep(i, replacements.size, "Verifying")
+                        val ok = runCatching {
+                            val resolver = context.contentResolver
+                            // Now that the old file is gone, give the new one the original name and date.
+                            runCatching { resolver.update(r.fresh, ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, r.item.name) }, null, null) }
+                            runCatching { resolver.update(r.fresh, ContentValues().apply { put(MediaStore.MediaColumns.DATE_TAKEN, r.item.taken) }, null, null) }
+                            val newId = android.content.ContentUris.parseId(r.fresh)
+                            Prefs.replaceFavorite(r.item.id, newId)
+                            val taken = resolver.query(r.fresh, arrayOf("datetaken"), null, null, null)?.use { c -> if (c.moveToFirst()) c.getLong(0) else 0L } ?: 0L
+                            val fresh = r.item.copy(id = newId, uri = r.fresh)
+                            reports += ItemReport(r.item.name, r.before, read(context, fresh), asCopy = false, rebuilt = true, scrubbed = scrub,
+                                dateKept = kotlin.math.abs(taken - r.item.taken) < 2000)
+                        }
+                        ok.exceptionOrNull()?.let { e ->
+                            failed++
+                            if (error == null) error = (e.javaClass.simpleName + ": " + (e.message ?: "")).take(140)
+                        }
+                    }
+                }
+            }
+        }
         return CleanResult(reports, videos, failed, error)
+    }
+
+    private class Replacement(val item: MediaItem, val fresh: Uri, val before: List<Row>)
+
+    /**
+     * Maximum wipe, timeline-safe: saves the rebuilt photo as a new file in the same folder,
+     * with the original "date taken" given to Android's photo list. Null if the folder won't take new files.
+     */
+    private fun wipeAsNew(context: Context, item: MediaItem, scrub: Boolean): Uri? {
+        val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val resolver = context.contentResolver
+        val uri = runCatching {
+            resolver.insert(collection, ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, item.name)
+                put(MediaStore.MediaColumns.MIME_TYPE, item.mime)
+                put(MediaStore.MediaColumns.RELATIVE_PATH, item.relPath)
+                put(MediaStore.MediaColumns.DATE_TAKEN, item.taken)
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            })
+        }.getOrNull() ?: return null
+        try {
+            val bmp = rebuildBitmap(context, item, scrub)
+            val bytes = java.io.ByteArrayOutputStream().also { bmp.compress(formatFor(item.mime), 95, it) }.toByteArray()
+            bmp.recycle()
+            resolver.openOutputStream(uri, "w")!!.use { it.write(bytes) }
+            val saved = resolver.openInputStream(uri)!!.use { it.readBytes() }
+            check(saved.contentEquals(bytes)) { "the phone didn't save the rebuilt photo" }
+            check(!Deep.hasExif(saved)) { "the saved photo still has a photo-info block" }
+            resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+            runCatching { resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.DATE_TAKEN, item.taken) }, null, null) }
+            return uri
+        } catch (e: Exception) {
+            runCatching { resolver.delete(uri, null, null) }
+            throw e
+        }
     }
 
     /**
@@ -254,13 +332,16 @@ object Privacy {
     }
 
     /**
-     * Weakens the camera sensor's fingerprint: shrinks to 90% (smearing the pattern across pixels),
-     * then adds faint random grain that doesn't match any camera.
+     * Weakens the camera sensor's fingerprint: shrinks to 90% and back (smearing the pattern across pixels),
+     * then adds faint random grain that doesn't match any camera. The photo keeps its size.
      */
     private fun scrubNoise(src: Bitmap): Bitmap {
-        val w = max(1, (src.width * 0.9f).roundToInt()); val h = max(1, (src.height * 0.9f).roundToInt())
-        val scaled = Bitmap.createScaledBitmap(src, w, h, true).let { if (it.isMutable) it else it.copy(Bitmap.Config.ARGB_8888, true) }
-        if (scaled !== src) src.recycle()
+        // Shrink to 90% to smear the pattern, then back to the original size, so repeat wipes never shrink the photo.
+        val w = src.width; val h = src.height
+        val small = Bitmap.createScaledBitmap(src, max(1, (w * 0.9f).roundToInt()), max(1, (h * 0.9f).roundToInt()), true)
+        if (small !== src) src.recycle()
+        val scaled = Bitmap.createScaledBitmap(small, w, h, true).let { if (it.isMutable) it else it.copy(Bitmap.Config.ARGB_8888, true) }
+        if (scaled !== small) small.recycle()
         val rnd = java.security.SecureRandom()
         val row = IntArray(w)
         for (y in 0 until h) {
