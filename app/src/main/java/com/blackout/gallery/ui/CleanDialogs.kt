@@ -125,6 +125,8 @@ private fun ReportDialog(r: Privacy.CleanResult, onClose: () -> Unit) {
                 val kept = reports.count { it.dateKept == true }
                 val lost = reports.count { it.dateKept == false }
                 if (kept > 0) Bullet("✓ Timeline place kept for $kept photo${if (kept == 1) "" else "s"} (date known only to your phone's photo list, not stored in the file)", C.Good)
+                val moved = reports.count { it.newFolder != null }
+                if (moved > 0) Bullet("Saved in a new folder with the same name: ${reports.mapNotNull { it.newFolder }.distinct().joinToString()} (the old folder doesn't accept new files from apps). File names are unchanged.", C.Sub)
                 if (lost > 0) Bullet("⚠ $lost photo${if (lost == 1) "" else "s"} may move to today in the timeline (Android didn't keep the date)", C.Warn)
                 if (reports.any { r -> r.removed.any { it.detail.contains("motion photo") } }) Bullet("Motion photos: the short video part was removed with the extra data", C.Sub)
                 Text(if (rebuilt > 0) "No date or other info is stored inside the rebuilt photos." else "Kept: the date the photo was taken, so it stays in place in your timeline.", color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))

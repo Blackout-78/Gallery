@@ -103,7 +103,7 @@ object Privacy {
     }
 
     /** What happened to one photo: what was removed, and what (if anything) was still there when re-checked. */
-    data class ItemReport(val name: String, val removed: List<Row>, val leftover: List<Row>, val asCopy: Boolean, val rebuilt: Boolean = false, val scrubbed: Boolean = false, val dateKept: Boolean? = null)
+    data class ItemReport(val name: String, val removed: List<Row>, val leftover: List<Row>, val asCopy: Boolean, val rebuilt: Boolean = false, val scrubbed: Boolean = false, val dateKept: Boolean? = null, val newFolder: String? = null)
     data class CleanResult(val reports: List<ItemReport>, val skippedVideos: Int, val failed: Int, val error: String?)
 
     /**
@@ -185,8 +185,10 @@ object Privacy {
                             Prefs.replaceFavorite(r.item.id, newId)
                             val taken = resolver.query(r.fresh, arrayOf("datetaken"), null, null, null)?.use { c -> if (c.moveToFirst()) c.getLong(0) else 0L } ?: 0L
                             val fresh = r.item.copy(id = newId, uri = r.fresh)
+                            val path = resolver.query(r.fresh, arrayOf("relative_path"), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
                             reports += ItemReport(r.item.name, r.before, read(context, fresh), asCopy = false, rebuilt = true, scrubbed = scrub,
-                                dateKept = kotlin.math.abs(taken - r.item.taken) < 2000)
+                                dateKept = kotlin.math.abs(taken - r.item.taken) < 2000,
+                                newFolder = path?.takeIf { it != r.item.relPath }?.trimEnd('/'))
                         }
                         ok.exceptionOrNull()?.let { e ->
                             failed++
@@ -199,6 +201,12 @@ object Privacy {
         return CleanResult(reports, videos, failed, error)
     }
 
+    /** "g/" → "Pictures/g/", "Download/Trip/" → "Pictures/Trip/": a new folder with the same name Android lets apps use. */
+    fun sameNameFolder(item: MediaItem): String {
+        val name = item.relPath.trimEnd('/').substringAfterLast('/').ifBlank { item.album }.ifBlank { "Photos" }
+        return "Pictures/$name/"
+    }
+
     private class Replacement(val item: MediaItem, val fresh: Uri, val before: List<Row>)
 
     /**
@@ -208,15 +216,17 @@ object Privacy {
     private fun wipeAsNew(context: Context, item: MediaItem, scrub: Boolean): Uri? {
         val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         val resolver = context.contentResolver
-        val uri = runCatching {
+        fun insertAt(path: String) = runCatching {
             resolver.insert(collection, ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, item.name)
                 put(MediaStore.MediaColumns.MIME_TYPE, item.mime)
-                put(MediaStore.MediaColumns.RELATIVE_PATH, item.relPath)
+                put(MediaStore.MediaColumns.RELATIVE_PATH, path)
                 put(MediaStore.MediaColumns.DATE_TAKEN, item.taken)
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             })
-        }.getOrNull() ?: return null
+        }.getOrNull()
+        // Same folder if Android allows it; otherwise a new folder with the same name inside Pictures.
+        val uri = insertAt(item.relPath) ?: insertAt(sameNameFolder(item)) ?: return null
         try {
             val bmp = rebuildBitmap(context, item, scrub)
             val bytes = java.io.ByteArrayOutputStream().also { bmp.compress(formatFor(item.mime), 95, it) }.toByteArray()
