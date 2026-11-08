@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -180,11 +181,14 @@ fun DeleteAlbumsDialog(ids: Set<Long>, onDone: () -> Unit, onCancel: () -> Unit)
 @Composable
 fun AlbumScreen(albumId: Long, selection: Selection, onBack: () -> Unit, onOpen: (List<MediaItem>, MediaItem) -> Unit) {
     var askDelete by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     if (askDelete) DeleteAlbumsDialog(setOf(albumId), onDone = { askDelete = false; onBack() }, onCancel = { askDelete = false })
     val all = GalleryState.items.filter { it.albumId == albumId }
     val list = all.ordered(Prefs.sort)
     Column(Modifier.fillMaxSize()) {
         if (selection.active) SelectTopBar(selection, list) else TitleBar(all.firstOrNull()?.album ?: "Album", "${list.size} items", onBack) {
+            IconButton(onClick = { scope.launch { Actions.clean(context, all) } }) { Icon(Icons.Outlined.VerifiedUser, "Remove hidden info from album", tint = C.Accent) }
             IconButton(onClick = { askDelete = true }) { Icon(Icons.Outlined.Delete, "Delete album", tint = C.Text) }
         }
         if (list.isEmpty()) EmptyNote("This album is empty")
