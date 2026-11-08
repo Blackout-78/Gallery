@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
+import com.blackout.gallery.data.GalleryState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -41,6 +43,7 @@ fun GalleryRoot() {
     var favQuery by rememberSaveable { mutableStateOf("") }
     var pickedAlbums by remember { mutableStateOf(emptySet<Long>()) }
     var askDeleteAlbums by remember { mutableStateOf(false) }
+    var moveAlbums by remember { mutableStateOf(false) }
 
     fun push(s: Screen) { selection.clear(); stack = stack + s }
     fun pop() { selection.clear(); stack = stack.dropLast(1) }
@@ -72,7 +75,8 @@ fun GalleryRoot() {
                         Modifier.fillMaxWidth().background(C.Card).navigationBarsPadding().padding(top = 12.dp, bottom = 14.dp),
                         horizontalArrangement = Arrangement.SpaceAround,
                     ) {
-                        BarAction(Icons.Outlined.Delete, "Delete ${pickedAlbums.size} album${if (pickedAlbums.size == 1) "" else "s"}", tint = C.Danger) { askDeleteAlbums = true }
+                        BarAction(Icons.Outlined.CreateNewFolder, "Move") { moveAlbums = true }
+                        BarAction(Icons.Outlined.Delete, "Delete", tint = C.Danger) { askDeleteAlbums = true }
                     }
                     else -> TabBar(tab) { selection.clear(); pickedAlbums = emptySet(); tab = it }
                 }
@@ -86,6 +90,8 @@ fun GalleryRoot() {
             Screen.TrashView -> Box(Modifier.fillMaxSize().statusBarsPadding()) { TrashScreen(::pop) }
         }
         if (askDeleteAlbums) DeleteAlbumsDialog(pickedAlbums, onDone = { askDeleteAlbums = false; pickedAlbums = emptySet() }, onCancel = { askDeleteAlbums = false })
+        if (moveAlbums) MoveDialog(GalleryState.items.filter { it.albumId in pickedAlbums },
+            onDone = { moveAlbums = false; pickedAlbums = emptySet() }, onCancel = { moveAlbums = false })
         CleanDialogs()
     }
 }

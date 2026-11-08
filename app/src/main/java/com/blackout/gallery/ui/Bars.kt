@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Folder
@@ -156,6 +157,8 @@ fun SelectBottomBar(selection: Selection) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     fun picked() = GalleryState.items.filter { it.id in selection.ids }
+    var moving by remember { mutableStateOf(false) }
+    if (moving) MoveDialog(picked(), onDone = { moving = false; selection.clear() }, onCancel = { moving = false })
     Row(
         Modifier.fillMaxWidth().background(C.Card).navigationBarsPadding().padding(top = 12.dp, bottom = 14.dp),
         horizontalArrangement = Arrangement.SpaceAround,
@@ -168,6 +171,7 @@ fun SelectBottomBar(selection: Selection) {
         BarAction(if (allFav) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder, if (allFav) "Unfavorite" else "Favorite") {
             Prefs.toggleFavorites(selection.ids)
         }
+        BarAction(Icons.Outlined.CreateNewFolder, "Move") { moving = true }
         BarAction(Icons.Outlined.Delete, "Delete") { scope.launch { if (Actions.delete(context, picked())) selection.clear() } }
     }
 }

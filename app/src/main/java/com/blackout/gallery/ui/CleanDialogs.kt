@@ -50,7 +50,7 @@ fun CleanDialogs() {
                         color = C.Accent, trackColor = C.Line, modifier = Modifier.fillMaxWidth(),
                     )
                     if (p.title == "Removing hidden info") Text("• Reading what's inside\n• Removing it\n• Opening the photo again to check", color = C.Sub, fontSize = 13.sp)
-                    else Text("• Copying into Gallery's Trash\n• Removing from the folder", color = C.Sub, fontSize = 13.sp)
+                    else if (p.title == "Moving to Trash") Text("• Copying into Gallery's Trash\n• Removing from the folder", color = C.Sub, fontSize = 13.sp)
                 }
             },
             confirmButton = {},
