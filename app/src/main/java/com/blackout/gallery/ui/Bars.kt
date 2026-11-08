@@ -229,8 +229,9 @@ object Actions {
         } finally {
             CleanUi.progress = null
         }
-        if (r == null) { say(context, "Not changed — permission wasn't given"); return }
-        CleanUi.result = r
+        // The report always opens, even when nothing could be changed.
+        CleanUi.result = r ?: Privacy.CleanResult(emptyList(), 0, items.count { !it.isVideo }, "Android's permission to change the photos wasn't given")
+        if (r == null) return
         CleanUi.version++
         GalleryState.refreshSoon(context)
     }

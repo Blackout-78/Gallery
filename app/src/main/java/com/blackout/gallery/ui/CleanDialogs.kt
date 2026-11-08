@@ -139,7 +139,6 @@ private fun Bullet(text: String, color: Color = C.Text) {
 @Composable
 private fun ChooseLevelDialog(items: List<com.blackout.gallery.data.MediaItem>) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val photos = items.count { !it.isVideo }
     // Not saved anywhere: the box always opens on Standard, leaving no record of past choices.
     var maximum by remember { mutableStateOf(false) }
@@ -174,7 +173,8 @@ private fun ChooseLevelDialog(items: List<com.blackout.gallery.data.MediaItem>) 
         confirmButton = {
             TextButton(onClick = {
                 CleanUi.ask = null
-                scope.launch { Actions.runClean(context, items, maximum, maximum && scrub) }
+                // Runs in the app's own scope: closing this box must not stop the cleaning.
+                com.blackout.gallery.GalleryApp.appScope.launch { Actions.runClean(context, items, maximum, maximum && scrub) }
             }) { Text(if (maximum) "Wipe" else "Remove") }
         },
         dismissButton = { TextButton(onClick = { CleanUi.ask = null }) { Text("Cancel") } },
