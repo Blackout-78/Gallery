@@ -130,6 +130,61 @@ object Deep {
         return out.toByteArray()
     }
 
+    /** True if the JPEG still carries a photo-info (Exif) block. */
+    fun hasExif(b: ByteArray): Boolean {
+        val parts = parseJpeg(b) ?: return false
+        return parts.segs.any { it.marker == 0xE1 && startsWith(b, it.start + 4, "Exif") }
+    }
+
+    /** Plain-language list of every block in the file, for the File check view. */
+    fun describe(b: ByteArray): List<String> {
+        val out = mutableListOf<String>()
+        fun size(n: Int) = if (n >= 1024 * 1024) "%.1f MB".format(n / 1048576f) else if (n >= 1024) "${n / 1024} KB" else "$n bytes"
+        when {
+            isJpeg(b) -> {
+                val parts = parseJpeg(b) ?: return listOf("Couldn't read this file's layout")
+                for (s in parts.segs) {
+                    val p = s.start + 4; val n = s.end - s.start
+                    out += when {
+                        s.marker == 0xE0 && startsWith(b, p, "JFIF") -> "Basic header (JFIF) · ${size(n)}"
+                        s.marker == 0xE1 && startsWith(b, p, "Exif") -> {
+                            val tags = runCatching {
+                                val ex = androidx.exifinterface.media.ExifInterface(b.inputStream())
+                                EXIF_NAMES.filter { ex.getAttribute(it.first) != null }.joinToString(", ") { it.second }
+                            }.getOrDefault("")
+                            "Photo info block · ${size(n)}" + if (tags.isNotEmpty()) " · has: $tags" else ""
+                        }
+                        s.marker == 0xE1 -> "XMP block · ${size(n)}"
+                        s.marker == 0xE2 && startsWith(b, p, "ICC_PROFILE") -> "Color profile · ${size(n)}"
+                        s.marker == 0xE2 && startsWith(b, p, "MPF") -> "Hidden extra pictures · ${size(n)}"
+                        s.marker == 0xED -> "IPTC block · ${size(n)}"
+                        s.marker == 0xEE -> "Color mode (Adobe) · ${size(n)}"
+                        s.marker in 0xE0..0xEF -> "Maker block APP${s.marker - 0xE0} · ${size(n)}"
+                        s.marker == 0xFE -> "Comment · ${size(n)}"
+                        s.marker == 0xDB -> "Compression tables · ${size(n)}"
+                        s.marker == 0xC4 -> "Compression codes · ${size(n)}"
+                        s.marker == 0xDD -> "Restart markers (camera-style compression)"
+                        s.marker in 0xC0..0xCF -> "Picture size and format · ${size(n)}"
+                        s.marker == 0xDA -> "Picture data · ${size(n)}"
+                        else -> "Block 0x%02X · %s".format(s.marker, size(n))
+                    }
+                }
+                val extra = b.size - parts.end
+                out += if (extra > 0) "Data after the picture · ${size(extra)}" else "Nothing after the picture"
+            }
+            isPng(b) -> pngChunks(b) { type, start, end -> out += "PNG $type · ${size(end - start)}" }
+            else -> out += "Not a JPEG or PNG · ${size(b.size)}"
+        }
+        return out.distinct().let { list -> list.filterNot { it.startsWith("Compression codes") } + list.filter { it.startsWith("Compression codes") }.take(1) }
+    }
+
+    private val EXIF_NAMES = listOf(
+        "Orientation" to "rotation", "ImageWidth" to "width", "ImageLength" to "height", "DateTime" to "date", "DateTimeOriginal" to "date taken",
+        "Make" to "phone maker", "Model" to "phone model", "Software" to "software", "GPSLatitude" to "location",
+        "BodySerialNumber" to "serial", "ImageUniqueID" to "photo ID", "Artist" to "owner", "ExposureTime" to "exposure",
+        "FNumber" to "aperture", "ISOSpeedRatings" to "ISO", "LightSource" to "light source", "Flash" to "flash", "FocalLength" to "focal length",
+    )
+
     // ---------- PNG ----------
     private val PNG_SIG = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
     private fun isPng(b: ByteArray) = b.size > 8 && (0 until 8).all { b[it] == PNG_SIG[it] }

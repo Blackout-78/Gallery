@@ -113,7 +113,7 @@ private fun ReportDialog(r: Privacy.CleanResult, onClose: () -> Unit) {
                 if (r.skippedVideos > 0) Bullet("${r.skippedVideos} video${if (r.skippedVideos == 1) "" else "s"} skipped — videos are cleaned when you share them", C.Sub)
                 if (r.failed > 0) Bullet("⚠ ${r.failed} couldn't be changed: ${r.error}", C.Danger)
                 if (reports.any { it.rebuilt }) {
-                    Bullet("✓ Rebuilt from pixels: no photo-info block, no hidden preview picture, no phone compression fingerprint", C.Good)
+                    Bullet("✓ Rebuilt from pixels, then read back from storage byte for byte: no photo-info block, no hidden preview picture, no phone compression fingerprint", C.Good)
                 }
                 if (reports.any { it.scrubbed }) Bullet("✓ Sensor noise scrubbed (photo is now 90% size)", C.Good)
                 if (reports.any { r -> r.removed.any { it.detail.contains("motion photo") } }) Bullet("Motion photos: the short video part was removed with the extra data", C.Sub)

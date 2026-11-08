@@ -200,11 +200,21 @@ object Privacy {
                 ?: error("can't write to the photo")
             val stamp = fileDate(context, item)
             out.use { o -> tmp.inputStream().use { it.copyTo(o) } }
+            // Prove the rebuilt photo really landed: read the saved file back and compare every byte.
+            val saved = resolver.openInputStream(item.uri)!!.use { it.readBytes() }
+            check(saved.contentEquals(tmp.readBytes())) { "the phone didn't save the rebuilt photo (file is unchanged)" }
+            check(!Deep.hasExif(saved)) { "the saved photo still has a photo-info block" }
             keepFileDate(context, item, stamp)
         } finally {
             tmp.delete()
         }
     }
+
+    /** Every block in the file, in plain words, for the File check view. */
+    fun describeFile(context: Context, item: MediaItem): List<String> = runCatching {
+        val bytes = context.contentResolver.openInputStream(original(context, item.uri))!!.use { it.readBytes() }
+        Deep.describe(bytes)
+    }.getOrElse { listOf("Couldn't open the file: ${it.message}") }
 
     /** The file's path and "last changed" time, read before it's rewritten. */
     private fun fileDate(context: Context, item: MediaItem): Pair<String, Long>? = runCatching {

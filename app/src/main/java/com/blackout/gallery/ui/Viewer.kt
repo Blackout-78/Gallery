@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -223,6 +226,22 @@ private fun HiddenInfoCard(item: MediaItem) {
                 Column(Modifier.padding(start = 12.dp)) {
                     Text(row.title, color = C.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Text(row.detail, color = C.Sub, fontSize = 13.sp, maxLines = 2)
+                }
+            }
+        }
+        if (!item.isVideo) {
+            var showFile by remember(item.id) { mutableStateOf(false) }
+            val blocks by produceState<List<String>?>(null, item.id, showFile, CleanUi.version) {
+                value = if (showFile) withContext(Dispatchers.IO) { Privacy.describeFile(context, item) } else null
+            }
+            Text(
+                if (showFile) "Hide file check" else "File check: show every block in this file",
+                color = C.Accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable { showFile = !showFile }.padding(vertical = 4.dp),
+            )
+            if (showFile) {
+                Column(Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState())) {
+                    (blocks ?: listOf("Reading…")).forEach { Text("•  $it", color = C.Text, fontSize = 12.sp) }
                 }
             }
         }
