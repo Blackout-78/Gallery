@@ -1,5 +1,6 @@
 package com.blackout.gallery.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,16 +27,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.blackout.gallery.data.Privacy
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** The "removing" progress box and the report that follows it. */
 object CleanUi {
     data class Progress(val done: Int, val total: Int, val stage: String, val title: String = "Removing hidden info")
     var progress by mutableStateOf<Progress?>(null)
     var result by mutableStateOf<Privacy.CleanResult?>(null)
+    /** Photos waiting for you to pick Standard or Maximum wipe. */
+    var ask by mutableStateOf<List<com.blackout.gallery.data.MediaItem>?>(null)
+    /** Goes up after each clean, so open screens re-check the photo. */
+    var version by mutableIntStateOf(0)
 }
 
 @Composable
 fun CleanDialogs() {
+    CleanUi.ask?.let { items -> ChooseLevelDialog(items) }
     CleanUi.progress?.let { p ->
         var dots by remember { mutableIntStateOf(1) }
         LaunchedEffect(Unit) { while (true) { delay(400); dots = dots % 3 + 1 } }
@@ -49,7 +56,7 @@ fun CleanDialogs() {
                         progress = { if (p.total == 0) 0f else ((p.done + stageShare(p.stage)) / p.total).coerceIn(0f, 1f) },
                         color = C.Accent, trackColor = C.Line, modifier = Modifier.fillMaxWidth(),
                     )
-                    if (p.title == "Removing hidden info") Text("• Reading what's inside\n• Removing it\n• Opening the photo again to check", color = C.Sub, fontSize = 13.sp)
+                    if (p.title == "Removing hidden info") Text("• Reading what's inside\n• Removing it (or rebuilding from pixels)\n• Opening the photo again to check", color = C.Sub, fontSize = 13.sp)
                     else if (p.title == "Moving to Trash") Text("• Copying into Gallery's Trash\n• Removing from the folder", color = C.Sub, fontSize = 13.sp)
                 }
             },
@@ -59,7 +66,7 @@ fun CleanDialogs() {
     CleanUi.result?.let { r -> ReportDialog(r) { CleanUi.result = null } }
 }
 
-private fun stageShare(stage: String) = when (stage) { "Removing" -> 0.33f; "Verifying" -> 0.66f; else -> 0f }
+private fun stageShare(stage: String) = when (stage) { "Removing", "Rebuilding" -> 0.33f; "Verifying" -> 0.66f; else -> 0f }
 
 @Composable
 private fun ReportDialog(r: Privacy.CleanResult, onClose: () -> Unit) {
@@ -105,6 +112,10 @@ private fun ReportDialog(r: Privacy.CleanResult, onClose: () -> Unit) {
                 }
                 if (r.skippedVideos > 0) Bullet("${r.skippedVideos} video${if (r.skippedVideos == 1) "" else "s"} skipped — videos are cleaned when you share them", C.Sub)
                 if (r.failed > 0) Bullet("⚠ ${r.failed} couldn't be changed: ${r.error}", C.Danger)
+                if (reports.any { it.rebuilt }) {
+                    Bullet("✓ Rebuilt from pixels: no photo-info block, no hidden preview picture, no phone compression fingerprint", C.Good)
+                }
+                if (reports.any { it.scrubbed }) Bullet("✓ Sensor noise scrubbed (photo is now 90% size)", C.Good)
                 if (reports.any { r -> r.removed.any { it.detail.contains("motion photo") } }) Bullet("Motion photos: the short video part was removed with the extra data", C.Sub)
                 Text("Kept: the date the photo was taken, so it stays in place in your timeline.", color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
             }
@@ -124,3 +135,66 @@ private fun Bullet(text: String, color: Color = C.Text) {
         Text(text, color = color, fontSize = 14.sp)
     }
 }
+
+@Composable
+private fun ChooseLevelDialog(items: List<com.blackout.gallery.data.MediaItem>) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val photos = items.count { !it.isVideo }
+    var maximum by remember { mutableStateOf(com.blackout.gallery.data.Prefs.maxWipe) }
+    var scrub by remember { mutableStateOf(com.blackout.gallery.data.Prefs.scrub) }
+    AlertDialog(
+        onDismissRequest = { CleanUi.ask = null },
+        title = { Text("Remove hidden info from $photos photo${if (photos == 1) "" else "s"}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                LevelOption("Standard", "Removes all hidden info. The picture itself isn't touched.", !maximum) { maximum = false }
+                LevelOption(
+                    "Maximum wipe",
+                    "Rebuilds each photo from its pixels and replaces the original. Also removes the hidden preview picture and the phone's compression fingerprint. Very slight quality loss.",
+                    maximum,
+                ) { maximum = true }
+                if (maximum) {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { scrub = !scrub }.padding(start = 8.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.material3.Checkbox(checked = scrub, onCheckedChange = { scrub = it },
+                            colors = androidx.compose.material3.CheckboxDefaults.colors(checkedColor = C.Accent))
+                        Column {
+                            Text("Also scrub sensor noise", color = C.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Weakens your camera's fingerprint. Photo becomes 90% size, slightly softer.", color = C.Sub, fontSize = 12.sp)
+                        }
+                    }
+                    Text("⚠ Maximum wipe replaces the originals. It can't be undone.", color = C.Warn, fontSize = 13.sp)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                com.blackout.gallery.data.Prefs.maxWipe = maximum
+                com.blackout.gallery.data.Prefs.scrub = scrub
+                CleanUi.ask = null
+                scope.launch { Actions.runClean(context, items, maximum, maximum && scrub) }
+            }) { Text(if (maximum) "Wipe" else "Remove") }
+        },
+        dismissButton = { TextButton(onClick = { CleanUi.ask = null }) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun LevelOption(title: String, text: String, on: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick)
+            .then(Modifier.padding(vertical = 4.dp)),
+        verticalAlignment = androidx.compose.ui.Alignment.Top,
+    ) {
+        androidx.compose.material3.RadioButton(selected = on, onClick = onClick,
+            colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = C.Accent))
+        Column(Modifier.padding(top = 10.dp)) {
+            Text(title, color = C.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(text, color = C.Sub, fontSize = 13.sp)
+        }
+    }
+}
+

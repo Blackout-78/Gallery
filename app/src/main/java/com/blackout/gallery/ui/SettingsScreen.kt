@@ -74,6 +74,12 @@ fun SettingsScreen(bottom: Dp) {
             SettingRow("Remove hidden info when sharing", "Always on. Shared copies never carry it.") {
                 Switch(checked = true, onCheckedChange = null, enabled = false, colors = switchColors())
             }
+            SettingRow("Share at maximum level", "Shared copies are rebuilt from pixels and get random file names") {
+                Switch(checked = Prefs.shareMax, onCheckedChange = { Prefs.shareMax = it }, colors = switchColors())
+            }
+            if (Prefs.shareMax) SettingRow("Scrub sensor noise when sharing", "Weakens your camera's fingerprint. Shared photos are 90% size, slightly softer") {
+                Switch(checked = Prefs.shareScrub, onCheckedChange = { Prefs.shareScrub = it }, colors = switchColors())
+            }
             SettingRow("Remove hidden info on edit", "Saved copies are cleaned") {
                 Switch(checked = Prefs.cleanOnEdit, onCheckedChange = { Prefs.cleanOnEdit = it }, colors = switchColors())
             }
@@ -86,7 +92,7 @@ fun SettingsScreen(bottom: Dp) {
                     },
                 ) { Text(if (noAsking) "On" else "Off", color = C.Sub, fontSize = 14.sp) }
             }
-            Text("Hidden info means location, phone model and serial numbers, owner name and notes. Photos don't store IP addresses.",
+            Text("Hidden info means location, phone model and serial numbers, owner name, notes and extra data blocks. Photos don't store IP addresses. Nothing can remove what's visible in the picture itself, like faces or street signs.",
                 color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(vertical = 10.dp))
         }
 

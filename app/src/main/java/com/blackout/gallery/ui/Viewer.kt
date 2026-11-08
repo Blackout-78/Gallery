@@ -196,7 +196,7 @@ private fun HiddenInfoCard(item: MediaItem) {
     val scope = rememberCoroutineScope()
     var reload by remember { mutableIntStateOf(0) }
     var busy by remember { mutableStateOf(false) }
-    val rows by produceState<List<Privacy.Row>?>(null, item.id, reload) {
+    val rows by produceState<List<Privacy.Row>?>(null, item.id, reload, CleanUi.version) {
         value = withContext(Dispatchers.IO) { Privacy.read(context, item) }
     }
     Column(

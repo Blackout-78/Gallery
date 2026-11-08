@@ -196,7 +196,7 @@ object Actions {
     suspend fun share(context: Context, items: List<MediaItem>) {
         if (items.isEmpty()) return
         say(context, if (items.size == 1) "Removing hidden info…" else "Removing hidden info from ${items.size} items…")
-        val files = withContext(Dispatchers.IO) { items.mapNotNull { Privacy.shareCopy(context, it) } }
+        val files = withContext(Dispatchers.IO) { items.mapNotNull { Privacy.shareCopy(context, it, Prefs.shareMax, Prefs.shareScrub) } }
         if (files.isEmpty()) { say(context, "Couldn't make a clean copy to share"); return }
         if (files.size < items.size) say(context, "${items.size - files.size} couldn't be cleaned and were left out")
         val uris = ArrayList<Uri>(files.map { FileProvider.getUriForFile(context, "${context.packageName}.files", it) })
@@ -213,20 +213,26 @@ object Actions {
         context.startActivity(Intent.createChooser(send, "Share"))
     }
 
-    /** Removes hidden info from the photos themselves, then shows what was removed and the re-check. */
-    suspend fun clean(context: Context, items: List<MediaItem>): Boolean {
+    /** Opens the box that asks how deep to clean. Returns true once it's open. */
+    fun clean(context: Context, items: List<MediaItem>): Boolean {
         if (items.isEmpty()) return false
         if (items.all { it.isVideo }) { say(context, "Videos are cleaned automatically when you share them"); return false }
+        CleanUi.ask = items
+        return true
+    }
+
+    /** Removes hidden info, then shows what was removed and the re-check. */
+    suspend fun runClean(context: Context, items: List<MediaItem>, maximum: Boolean, scrub: Boolean) {
         CleanUi.progress = CleanUi.Progress(0, items.count { !it.isVideo }, "Starting")
         val r = try {
-            Privacy.cleanPhotos(context, items) { done, total, stage -> CleanUi.progress = CleanUi.Progress(done, total, stage) }
+            Privacy.cleanPhotos(context, items, maximum, scrub) { done, total, stage -> CleanUi.progress = CleanUi.Progress(done, total, stage) }
         } finally {
             CleanUi.progress = null
         }
-        if (r == null) { say(context, "Not changed — permission wasn't given"); return false }
+        if (r == null) { say(context, "Not changed — permission wasn't given"); return }
         CleanUi.result = r
+        CleanUi.version++
         GalleryState.refreshSoon(context)
-        return true
     }
 
     /** Moves to the app's trash. Returns true when done. */
