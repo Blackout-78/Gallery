@@ -1,0 +1,122 @@
+package com.blackout.gallery.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.blackout.gallery.data.Privacy
+import kotlinx.coroutines.delay
+
+/** The "removing" progress box and the report that follows it. */
+object CleanUi {
+    data class Progress(val done: Int, val total: Int, val stage: String)
+    var progress by mutableStateOf<Progress?>(null)
+    var result by mutableStateOf<Privacy.CleanResult?>(null)
+}
+
+@Composable
+fun CleanDialogs() {
+    CleanUi.progress?.let { p ->
+        var dots by remember { mutableIntStateOf(1) }
+        LaunchedEffect(Unit) { while (true) { delay(400); dots = dots % 3 + 1 } }
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Removing hidden info") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Photo ${minOf(p.done + 1, p.total)} of ${p.total} · ${p.stage}" + ".".repeat(dots), color = C.Text, fontSize = 15.sp)
+                    LinearProgressIndicator(
+                        progress = { if (p.total == 0) 0f else (p.done + stageShare(p.stage)) / p.total },
+                        color = C.Accent, trackColor = C.Line, modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text("• Reading what's inside\n• Removing it\n• Opening the photo again to check", color = C.Sub, fontSize = 13.sp)
+                }
+            },
+            confirmButton = {},
+        )
+    }
+    CleanUi.result?.let { r -> ReportDialog(r) { CleanUi.result = null } }
+}
+
+private fun stageShare(stage: String) = when (stage) { "Removing" -> 0.33f; "Verifying" -> 0.66f; else -> 0f }
+
+@Composable
+private fun ReportDialog(r: Privacy.CleanResult, onClose: () -> Unit) {
+    val reports = r.reports
+    val withInfo = reports.filter { it.removed.isNotEmpty() }
+    val leftovers = reports.filter { it.leftover.isNotEmpty() }
+    val title = when {
+        leftovers.isNotEmpty() -> "Check found leftovers"
+        reports.isEmpty() -> "Nothing was cleaned"
+        withInfo.isEmpty() -> "Already clean"
+        else -> "Hidden info removed"
+    }
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text(title) },
+        text = {
+            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (withInfo.isNotEmpty()) {
+                    Heading(if (reports.size == 1) "Removed from ${reports[0].name}" else "Removed")
+                    if (reports.size == 1) {
+                        reports[0].removed.forEach { Bullet("${it.title} — ${it.detail}") }
+                    } else {
+                        // One line per kind, with how many photos had it.
+                        withInfo.flatMap { rep -> rep.removed.map { it.title } }.groupingBy { it }.eachCount().forEach { (kind, n) ->
+                            Bullet("$kind — $n photo${if (n == 1) "" else "s"}")
+                        }
+                    }
+                }
+                val clean = reports.size - withInfo.size
+                if (clean > 0) Bullet("$clean photo${if (clean == 1) " was" else "s were"} already clean", C.Sub)
+                if (reports.any { it.asCopy }) Bullet("HEIC photos: saved as clean JPEG copies in Gallery Clean", C.Sub)
+
+                if (reports.isNotEmpty()) {
+                    Heading("Verified")
+                    if (leftovers.isEmpty()) {
+                        Bullet("✓ Opened ${reports.size} photo${if (reports.size == 1) "" else "s"} again: nothing left that points to you", C.Good)
+                    } else {
+                        Bullet("✓ ${reports.size - leftovers.size} of ${reports.size} checked clean", C.Good)
+                        leftovers.forEach { rep -> Bullet("⚠ ${rep.name} still has: ${rep.leftover.joinToString { it.title }}", C.Warn) }
+                    }
+                }
+                if (r.skippedVideos > 0) Bullet("${r.skippedVideos} video${if (r.skippedVideos == 1) "" else "s"} skipped — videos are cleaned when you share them", C.Sub)
+                if (r.failed > 0) Bullet("⚠ ${r.failed} couldn't be changed: ${r.error}", C.Danger)
+                Text("Kept: the date the photo was taken, so it stays in place in your timeline.", color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text("OK") } },
+    )
+}
+
+@Composable
+private fun Heading(text: String) =
+    Text(text, color = C.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
+
+@Composable
+private fun Bullet(text: String, color: Color = C.Text) {
+    Row {
+        Text("•  ", color = color, fontSize = 14.sp)
+        Text(text, color = color, fontSize = 14.sp)
+    }
+}
