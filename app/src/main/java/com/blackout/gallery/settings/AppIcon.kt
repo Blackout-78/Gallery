@@ -40,8 +40,12 @@ object AppIcon {
         val wanted = if (style == DEFAULT_STYLE && main == DEFAULT_MAIN && second == DEFAULT_SECOND) DEFAULT_ALIAS
         else presets(context).filter { it.style == style }.minBy { distance(it.main, main) * 2 + distance(it.second, second) }.alias
         val current = prefs(context).getString("alias", DEFAULT_ALIAS)!!
-        if (wanted == current) return wanted
         val pm = context.packageManager
+        if (wanted == current) {
+            // Make sure it's really on (an update or reinstall can reset it).
+            set(pm, context, wanted, true)
+            return wanted
+        }
         // Turn the new icon on before the old one off, so Gallery is never missing from the drawer.
         set(pm, context, wanted, true)
         set(pm, context, current, false)
@@ -55,6 +59,22 @@ object AppIcon {
             if (on) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
             PackageManager.DONT_KILL_APP,
         )
+    }
+
+    /**
+     * Makes the drawer icon and the home-screen icon match your current choice.
+     * Runs whenever you change the style or a color, and once after each app update.
+     */
+    fun sync(context: Context, style: String, main: Int, second: Int) {
+        applyDrawer(context, style, main, second)
+        pinOrUpdate(context, style, main, second, ask = false)
+    }
+
+    fun syncAfterUpdate(context: Context, style: String, main: Int, second: Int) {
+        val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode }.getOrDefault(0L)
+        if (prefs(context).getLong("syncedVersion", -1) == version) return
+        sync(context, style, main, second)
+        prefs(context).edit().putLong("syncedVersion", version).apply()
     }
 
     /** Adds a home-screen icon in your exact colors, or updates the one already there. */

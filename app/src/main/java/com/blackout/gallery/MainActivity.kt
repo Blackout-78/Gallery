@@ -62,6 +62,8 @@ class MainActivity : ComponentActivity() {
             sender.launch(IntentSenderRequest.Builder(s).build())
             d.await()
         }
+        // After an update, put back the icon you chose.
+        com.blackout.gallery.settings.AppIcon.syncAfterUpdate(this, com.blackout.gallery.data.Prefs.iconStyle, com.blackout.gallery.data.Prefs.iconMain, com.blackout.gallery.data.Prefs.iconSecond)
         setContent { GalleryTheme { PermissionGate { GalleryRoot() } } }
     }
 

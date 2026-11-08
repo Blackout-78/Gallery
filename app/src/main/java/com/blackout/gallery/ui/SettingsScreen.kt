@@ -218,7 +218,7 @@ private fun AppIconSection() {
             val bmp = remember(s, Prefs.iconMain, Prefs.iconSecond) { AppIcon.render(s, Prefs.iconMain, Prefs.iconSecond, 192).asImageBitmap() }
             Column(
                 Modifier.clip(RoundedCornerShape(18.dp)).border(2.dp, if (on) C.Accent else Color.Transparent, RoundedCornerShape(18.dp))
-                    .clickable { Prefs.iconStyle = s; applied = false }.padding(6.dp),
+                    .clickable { Prefs.iconStyle = s; AppIcon.sync(context, s, Prefs.iconMain, Prefs.iconSecond) }.padding(6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Image(bmp, "Style $s", Modifier.size(58.dp).clip(CircleShape))
@@ -230,13 +230,9 @@ private fun AppIconSection() {
     SettingRow("Main color", "Color wheel", onClick = { picker = "main" }) { Swatch(Color(Prefs.iconMain)) }
     SettingRow("Second color", "Color wheel", onClick = { picker = "second" }) { Swatch(Color(Prefs.iconSecond)) }
     SettingRow(
-        "Apply to app drawer",
-        if (applied) "Done. The drawer shows the closest of 428 ready-made icons." else "Closest of 428 ready-made icons",
-        onClick = {
-            AppIcon.applyDrawer(context, Prefs.iconStyle, Prefs.iconMain, Prefs.iconSecond)
-            AppIcon.pinOrUpdate(context, Prefs.iconStyle, Prefs.iconMain, Prefs.iconSecond, ask = false)
-            applied = true
-        },
+        "App drawer icon",
+        if (applied) "Updated" else "Changes by itself. Tap to refresh if it looks old.",
+        onClick = { AppIcon.sync(context, Prefs.iconStyle, Prefs.iconMain, Prefs.iconSecond); applied = true },
     ) { Text("›", color = C.Sub, fontSize = 20.sp) }
     SettingRow("Add to home screen", "Exact colors. Updates by itself when you change them.", onClick = {
         val ok = AppIcon.pinOrUpdate(context, Prefs.iconStyle, Prefs.iconMain, Prefs.iconSecond, ask = true)
@@ -251,14 +247,15 @@ private fun AppIconSection() {
             initial = if (which == "main") Prefs.iconMain else Prefs.iconSecond,
             onPick = {
                 if (which == "main") Prefs.iconMain = it else Prefs.iconSecond = it
-                picker = null; applied = false
-                AppIcon.pinOrUpdate(context, Prefs.iconStyle, Prefs.iconMain, Prefs.iconSecond, ask = false)
+                picker = null
+                AppIcon.sync(context, Prefs.iconStyle, Prefs.iconMain, Prefs.iconSecond)
             },
             onDismiss = { picker = null },
             resetLabel = "Default",
             onReset = {
                 if (which == "main") Prefs.iconMain = AppIcon.DEFAULT_MAIN else Prefs.iconSecond = AppIcon.DEFAULT_SECOND
-                picker = null; applied = false
+                picker = null
+                AppIcon.sync(context, Prefs.iconStyle, Prefs.iconMain, Prefs.iconSecond)
             },
         )
     }
