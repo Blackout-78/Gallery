@@ -209,18 +209,18 @@ object Actions {
         context.startActivity(Intent.createChooser(send, "Share"))
     }
 
-    /** Removes hidden info from the photos themselves. Returns true when done. */
+    /** Removes hidden info from the photos themselves, then shows what was removed and the re-check. */
     suspend fun clean(context: Context, items: List<MediaItem>): Boolean {
         if (items.isEmpty()) return false
         if (items.all { it.isVideo }) { say(context, "Videos are cleaned automatically when you share them"); return false }
-        val r = Privacy.cleanPhotos(context, items) ?: run { say(context, "Not changed — permission wasn't given"); return false }
-        val parts = buildList {
-            if (r.cleaned > 0) add("Cleaned ${r.cleaned} photo${if (r.cleaned == 1) "" else "s"}")
-            if (r.copies > 0) add("saved ${r.copies} clean cop${if (r.copies == 1) "y" else "ies"} in Gallery Clean")
-            if (r.skippedVideos > 0) add("${r.skippedVideos} video${if (r.skippedVideos == 1) "" else "s"} skipped (cleaned when shared)")
-            if (r.failed > 0) add("${r.failed} failed (${r.error})")
+        CleanUi.progress = CleanUi.Progress(0, items.count { !it.isVideo }, "Starting")
+        val r = try {
+            Privacy.cleanPhotos(context, items) { done, total, stage -> CleanUi.progress = CleanUi.Progress(done, total, stage) }
+        } finally {
+            CleanUi.progress = null
         }
-        Toast.makeText(context, parts.joinToString(", "), if (r.failed > 0) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+        if (r == null) { say(context, "Not changed — permission wasn't given"); return false }
+        CleanUi.result = r
         GalleryState.refreshSoon(context)
         return true
     }

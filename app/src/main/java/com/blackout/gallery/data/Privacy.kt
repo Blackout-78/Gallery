@@ -27,7 +27,7 @@ import kotlin.math.roundToInt
  */
 object Privacy {
 
-    enum class Kind { Location, Device, Owner, Notes }
+    enum class Kind { Location, Device, Serial, Software, Owner, Notes }
     data class Row(val kind: Kind, val title: String, val detail: String)
 
     private val LOCATION_TAGS = listOf(
@@ -64,27 +64,29 @@ object Privacy {
 
     private fun readPhoto(context: Context, item: MediaItem): List<Row> {
         val exif = context.contentResolver.openInputStream(original(context, item.uri))?.use { ExifInterface(it) } ?: return emptyList()
+        return rowsOf(exif)
+    }
+
+    /** Everything in a photo's hidden info that can point back to you, one line per kind. */
+    fun rowsOf(exif: ExifInterface): List<Row> {
         val rows = mutableListOf<Row>()
+        fun get(tag: String) = exif.getAttribute(tag)?.trim()?.ifEmpty { null }
         val latLong = exif.latLong
-        if (latLong != null) {
-            rows.add(Row(Kind.Location, "Location", "%.5f, %.5f".format(latLong[0], latLong[1])))
-        } else if (LOCATION_TAGS.any { exif.getAttribute(it) != null }) {
-            rows.add(Row(Kind.Location, "Location", "Location details"))
+        if (latLong != null) rows += Row(Kind.Location, "Location", "%.5f, %.5f".format(latLong[0], latLong[1]))
+        else if (LOCATION_TAGS.any { get(it) != null }) rows += Row(Kind.Location, "Location", "GPS details")
+        val device = listOfNotNull(get("Make"), get("Model")).joinToString(" ")
+        val lens = listOfNotNull(get("LensMake"), get("LensModel")).joinToString(" ")
+        if (device.isNotEmpty() || lens.isNotEmpty() || get("MakerNote") != null) {
+            rows += Row(Kind.Device, "Phone", listOfNotNull(device.ifEmpty { null }, lens.ifEmpty { null }?.let { "lens $it" },
+                if (get("MakerNote") != null) "maker data" else null).joinToString(" · "))
         }
-        val device = listOfNotNull(exif.getAttribute("Make"), exif.getAttribute("Model")).joinToString(" ").trim()
-        val serials = listOf("BodySerialNumber", "LensSerialNumber", "ImageUniqueID").count { exif.getAttribute(it) != null }
-        val software = exif.getAttribute("Software")
-        if (device.isNotEmpty() || serials > 0 || software != null || exif.getAttribute("MakerNote") != null) {
-            val parts = listOfNotNull(
-                device.ifEmpty { null },
-                if (serials > 0) "serial numbers" else null,
-                software?.let { "app: $it" },
-            )
-            rows += Row(Kind.Device, "Device", parts.ifEmpty { listOf("Phone maker data") }.joinToString(" · "))
-        }
-        val owner = OWNER_TAGS.mapNotNull { exif.getAttribute(it)?.trim()?.ifEmpty { null } }
+        val serials = listOf("BodySerialNumber" to "phone serial", "LensSerialNumber" to "lens serial", "ImageUniqueID" to "photo ID")
+            .filter { get(it.first) != null }.map { it.second }
+        if (serials.isNotEmpty()) rows += Row(Kind.Serial, "Serial numbers", serials.joinToString(", "))
+        get("Software")?.let { rows += Row(Kind.Software, "Software", it) }
+        val owner = OWNER_TAGS.mapNotNull { get(it) }
         if (owner.isNotEmpty()) rows += Row(Kind.Owner, "Owner name", owner.joinToString(" · "))
-        if (NOTE_TAGS.any { !exif.getAttribute(it).isNullOrBlank() }) rows += Row(Kind.Notes, "Notes and IDs", "Comments, descriptions or editing history")
+        if (NOTE_TAGS.any { get(it) != null }) rows += Row(Kind.Notes, "Notes and IDs", "Comments, descriptions or editing history")
         return rows
     }
 
@@ -99,28 +101,42 @@ object Privacy {
         }
     }
 
-    data class CleanResult(val cleaned: Int, val copies: Int, val skippedVideos: Int, val failed: Int, val error: String?)
+    /** What happened to one photo: what was removed, and what (if anything) was still there when re-checked. */
+    data class ItemReport(val name: String, val removed: List<Row>, val leftover: List<Row>, val asCopy: Boolean)
+    data class CleanResult(val reports: List<ItemReport>, val skippedVideos: Int, val failed: Int, val error: String?)
 
-    /** Removes hidden info from the photos themselves. Videos are cleaned when you share them. */
-    suspend fun cleanPhotos(context: Context, items: List<MediaItem>): CleanResult? {
+    /**
+     * Removes hidden info from the photos themselves, then opens each one again to check nothing is left.
+     * Videos are cleaned when you share them.
+     */
+    suspend fun cleanPhotos(context: Context, items: List<MediaItem>, onStep: (done: Int, total: Int, stage: String) -> Unit): CleanResult? {
         val photos = items.filter { !it.isVideo }
         val videos = items.size - photos.size
         val inPlace = photos.filter { canEditInPlace(it) }
         if (!MediaAccess.allowWrite(context, inPlace.map { it.uri })) return null
-        var cleaned = 0; var copies = 0; var failed = 0
+        val reports = mutableListOf<ItemReport>()
+        var failed = 0
         var error: String? = null
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            for (item in photos) {
+            photos.forEachIndexed { i, item ->
+                fun step(stage: String) = onStep(i, photos.size, stage)
                 val result = runCatching {
+                    step("Reading")
+                    val before = read(context, item)
                     if (canEditInPlace(item)) {
+                        step("Removing")
                         cleanInPlace(context, item)
-                        cleaned++
+                        step("Verifying")
+                        reports += ItemReport(item.name, before, read(context, item), asCopy = false)
                     } else {
                         // Formats like HEIC can't be changed in place: save a clean JPEG copy next to it.
+                        step("Removing")
                         val bmp = decode(context, item.uri, 8192)
-                        saveJpeg(context, bmp, item.name.substringBeforeLast('.') + "_clean.jpg", "Pictures/Gallery Clean/")
+                        val copy = saveJpeg(context, bmp, item.name.substringBeforeLast('.') + "_clean.jpg", "Pictures/Gallery Clean/")
                         bmp.recycle()
-                        copies++
+                        step("Verifying")
+                        val after = context.contentResolver.openInputStream(copy)?.use { rowsOf(ExifInterface(it)) }.orEmpty()
+                        reports += ItemReport(item.name, before, after, asCopy = true)
                     }
                 }
                 result.exceptionOrNull()?.let { e ->
@@ -129,7 +145,7 @@ object Privacy {
                 }
             }
         }
-        return CleanResult(cleaned, copies, videos, failed, error)
+        return CleanResult(reports, videos, failed, error)
     }
 
     /**

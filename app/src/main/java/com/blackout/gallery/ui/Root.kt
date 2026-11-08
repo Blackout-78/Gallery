@@ -65,5 +65,6 @@ fun GalleryRoot() {
             is Screen.Edit -> EditorScreen(top.item, ::pop)
             Screen.TrashView -> Box(Modifier.fillMaxSize().statusBarsPadding()) { TrashScreen(::pop) }
         }
+        CleanDialogs()
     }
 }
