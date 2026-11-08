@@ -96,6 +96,8 @@ private fun ReportDialog(r: Privacy.CleanResult, onClose: () -> Unit) {
                     Heading("Verified")
                     if (leftovers.isEmpty()) {
                         Bullet("✓ Opened ${reports.size} photo${if (reports.size == 1) "" else "s"} again: nothing left that points to you", C.Good)
+                        Bullet("✓ Deep check, byte by byte: no location, phone details, XMP, IPTC, maker blocks or data after the picture", C.Good)
+                        Bullet("✓ Your phone's name, model and build number appear nowhere in the file", C.Good)
                     } else {
                         Bullet("✓ ${reports.size - leftovers.size} of ${reports.size} checked clean", C.Good)
                         leftovers.forEach { rep -> Bullet("⚠ ${rep.name} still has: ${rep.leftover.joinToString { it.title }}", C.Warn) }
@@ -103,6 +105,7 @@ private fun ReportDialog(r: Privacy.CleanResult, onClose: () -> Unit) {
                 }
                 if (r.skippedVideos > 0) Bullet("${r.skippedVideos} video${if (r.skippedVideos == 1) "" else "s"} skipped — videos are cleaned when you share them", C.Sub)
                 if (r.failed > 0) Bullet("⚠ ${r.failed} couldn't be changed: ${r.error}", C.Danger)
+                if (reports.any { r -> r.removed.any { it.detail.contains("motion photo") } }) Bullet("Motion photos: the short video part was removed with the extra data", C.Sub)
                 Text("Kept: the date the photo was taken, so it stays in place in your timeline.", color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
             }
         },

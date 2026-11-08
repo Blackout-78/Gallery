@@ -216,7 +216,7 @@ private fun HiddenInfoCard(item: MediaItem) {
                         Privacy.Kind.Location -> Icons.Outlined.LocationOn
                         Privacy.Kind.Device -> Icons.Outlined.PhoneAndroid
                         Privacy.Kind.Owner -> Icons.Outlined.Person
-                        Privacy.Kind.Notes, Privacy.Kind.Serial, Privacy.Kind.Software -> Icons.Outlined.Info
+                        Privacy.Kind.Notes, Privacy.Kind.Serial, Privacy.Kind.Software, Privacy.Kind.Extra -> Icons.Outlined.Info
                     },
                     null, tint = C.Warn, modifier = Modifier.size(20.dp),
                 )

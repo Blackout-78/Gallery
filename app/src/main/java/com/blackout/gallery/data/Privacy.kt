@@ -27,7 +27,7 @@ import kotlin.math.roundToInt
  */
 object Privacy {
 
-    enum class Kind { Location, Device, Serial, Software, Owner, Notes }
+    enum class Kind { Location, Device, Serial, Software, Owner, Notes, Extra }
     data class Row(val kind: Kind, val title: String, val detail: String)
 
     private val LOCATION_TAGS = listOf(
@@ -63,8 +63,9 @@ object Privacy {
     }.getOrDefault(emptyList())
 
     private fun readPhoto(context: Context, item: MediaItem): List<Row> {
-        val exif = context.contentResolver.openInputStream(original(context, item.uri))?.use { ExifInterface(it) } ?: return emptyList()
-        return rowsOf(exif)
+        val bytes = context.contentResolver.openInputStream(original(context, item.uri))?.use { it.readBytes() } ?: return emptyList()
+        val exif = runCatching { ExifInterface(bytes.inputStream()) }.getOrNull()
+        return (exif?.let { rowsOf(it) }.orEmpty()) + Deep.scan(bytes, item.mime).map { Row(Kind.Extra, it.title, it.detail) }
     }
 
     /** Everything in a photo's hidden info that can point back to you, one line per kind. */
@@ -161,6 +162,7 @@ object Privacy {
             val exif = ExifInterface(tmp.absolutePath)
             ALL_TAGS.forEach { exif.setAttribute(it, null) }
             exif.saveAttributes()
+            deepStrip(tmp)
             check(tmp.length() > 0) { "clean copy is empty" }
             val out = runCatching { resolver.openOutputStream(item.uri, "wt") }.getOrNull()
                 ?: resolver.openOutputStream(item.uri, "w")
@@ -169,6 +171,15 @@ object Privacy {
         } finally {
             tmp.delete()
         }
+    }
+
+    /** Removes the extra blocks the normal reader can't reach (XMP, IPTC, maker data, data after the picture). */
+    private fun deepStrip(file: File) {
+        val stripped = Deep.strip(file.readBytes()) ?: return
+        // Only keep the result if the picture still opens.
+        val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeByteArray(stripped, 0, stripped.size, opts)
+        if (opts.outWidth > 0) file.writeBytes(stripped)
     }
 
     /** A copy with no hidden info, for sending to another app. Null if it couldn't be cleaned. */
@@ -184,6 +195,7 @@ object Privacy {
                 val exif = ExifInterface(out.absolutePath)
                 ALL_TAGS.forEach { exif.setAttribute(it, null) }
                 exif.saveAttributes()
+                deepStrip(out)
                 out
             } else {
                 val out = File(dir, item.name.substringBeforeLast('.') + ".jpg")
