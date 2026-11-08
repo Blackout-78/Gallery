@@ -1,6 +1,22 @@
 package com.blackout.gallery.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -84,12 +100,19 @@ fun FavoritesTab(query: String, onQuery: (String) -> Unit, selection: Selection,
     }
 }
 
-/** Albums tab: one card per folder, plus the Trash. */
+/** Albums tab: one card per folder, plus the Trash. Long-press albums to pick them for deleting. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun AlbumsTab(query: String, onQuery: (String) -> Unit, bottom: Dp, onAlbum: (Album) -> Unit, onTrash: () -> Unit) {
+fun AlbumsTab(query: String, onQuery: (String) -> Unit, picked: Set<Long>, onPicked: (Set<Long>) -> Unit, bottom: Dp, onAlbum: (Album) -> Unit, onTrash: () -> Unit) {
     val albums = GalleryState.albums.filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) }
+    fun toggle(id: Long) = onPicked(if (id in picked) picked - id else picked + id)
     Column(Modifier.fillMaxSize()) {
-        SearchBox(query, onQuery, "Search albums", showSort = false)
+        if (picked.isEmpty()) SearchBox(query, onQuery, "Search albums", showSort = false)
+        else Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 12.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IconButton(onClick = { onPicked(emptySet()) }) { Icon(Icons.Filled.Close, "Stop picking", tint = C.Text) }
+            Text("${picked.size} album${if (picked.size == 1) "" else "s"} selected", color = C.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            SquareButton("Select all") { onPicked(albums.map { it.id }.toSet()) }
+        }
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -98,14 +121,23 @@ fun AlbumsTab(query: String, onQuery: (String) -> Unit, bottom: Dp, onAlbum: (Al
             modifier = Modifier.fillMaxSize(),
         ) {
             items(albums, key = { it.id }) { album ->
-                Column(Modifier.clickable { onAlbum(album) }) {
-                    Thumb(album.cover.uri, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(C.Card))
+                val on = album.id in picked
+                Column(Modifier.combinedClickable(onClick = { if (picked.isNotEmpty()) toggle(album.id) else onAlbum(album) }, onLongClick = { toggle(album.id) })) {
+                    Box {
+                        Thumb(album.cover.uri, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(C.Card)
+                            .then(if (on) Modifier.border(3.dp, C.Accent, RoundedCornerShape(12.dp)) else Modifier))
+                        if (picked.isNotEmpty()) Box(
+                            Modifier.align(Alignment.TopStart).padding(8.dp).size(24.dp).clip(CircleShape)
+                                .background(if (on) C.Accent else Color.Black.copy(alpha = 0.35f)).border(2.dp, Color.White, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) { if (on) Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(15.dp)) }
+                    }
                     Spacer(Modifier.height(6.dp))
                     Text(album.name, color = C.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text("${album.items.size} items", color = C.Sub, fontSize = 13.sp)
                 }
             }
-            if (query.isBlank()) item(key = "trash") {
+            if (query.isBlank() && picked.isEmpty()) item(key = "trash") {
                 Column(Modifier.clickable { onTrash() }) {
                     Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(C.Card), contentAlignment = Alignment.Center) {
                         Icon(Icons.Outlined.Delete, null, tint = C.Sub, modifier = Modifier.size(40.dp))
@@ -119,13 +151,42 @@ fun AlbumsTab(query: String, onQuery: (String) -> Unit, bottom: Dp, onAlbum: (Al
     }
 }
 
+/** Asks before deleting whole albums. Everything in them goes to Trash. */
+@Composable
+fun DeleteAlbumsDialog(ids: Set<Long>, onDone: () -> Unit, onCancel: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val items = GalleryState.items.filter { it.albumId in ids }
+    val names = GalleryState.albums.filter { it.id in ids }.map { it.name }
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(if (names.size == 1) "Delete \"${names[0]}\"?" else "Delete ${names.size} albums?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("•  ${items.size} photos and videos move to Trash", color = C.Text, fontSize = 14.sp)
+                Text("•  Restore them from Trash for ${Prefs.trashDays} days", color = C.Text, fontSize = 14.sp)
+                Text("•  The album disappears once it's empty", color = C.Text, fontSize = 14.sp)
+                Text("•  Other files in the folder (like videos outside Camera) aren't touched", color = C.Sub, fontSize = 13.sp)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { scope.launch { if (Actions.delete(context, items)) onDone() else onCancel() } }) { Text("Delete", color = C.Danger) }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
+    )
+}
+
 /** One album's photos. */
 @Composable
 fun AlbumScreen(albumId: Long, selection: Selection, onBack: () -> Unit, onOpen: (List<MediaItem>, MediaItem) -> Unit) {
+    var askDelete by remember { mutableStateOf(false) }
+    if (askDelete) DeleteAlbumsDialog(setOf(albumId), onDone = { askDelete = false; onBack() }, onCancel = { askDelete = false })
     val all = GalleryState.items.filter { it.albumId == albumId }
     val list = all.ordered(Prefs.sort)
     Column(Modifier.fillMaxSize()) {
-        if (selection.active) SelectTopBar(selection, list) else TitleBar(all.firstOrNull()?.album ?: "Album", "${list.size} items", onBack)
+        if (selection.active) SelectTopBar(selection, list) else TitleBar(all.firstOrNull()?.album ?: "Album", "${list.size} items", onBack) {
+            IconButton(onClick = { askDelete = true }) { Icon(Icons.Outlined.Delete, "Delete album", tint = C.Text) }
+        }
         if (list.isEmpty()) EmptyNote("This album is empty")
         else MediaGrid(list, Prefs.sort == Sort.Newest || Prefs.sort == Sort.Oldest, selection, { onOpen(list, it) }, 16.dp)
     }

@@ -29,7 +29,7 @@ import kotlinx.coroutines.delay
 
 /** The "removing" progress box and the report that follows it. */
 object CleanUi {
-    data class Progress(val done: Int, val total: Int, val stage: String)
+    data class Progress(val done: Int, val total: Int, val stage: String, val title: String = "Removing hidden info")
     var progress by mutableStateOf<Progress?>(null)
     var result by mutableStateOf<Privacy.CleanResult?>(null)
 }
@@ -41,15 +41,16 @@ fun CleanDialogs() {
         LaunchedEffect(Unit) { while (true) { delay(400); dots = dots % 3 + 1 } }
         AlertDialog(
             onDismissRequest = {},
-            title = { Text("Removing hidden info") },
+            title = { Text(p.title) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Photo ${minOf(p.done + 1, p.total)} of ${p.total} · ${p.stage}" + ".".repeat(dots), color = C.Text, fontSize = 15.sp)
                     LinearProgressIndicator(
-                        progress = { if (p.total == 0) 0f else (p.done + stageShare(p.stage)) / p.total },
+                        progress = { if (p.total == 0) 0f else ((p.done + stageShare(p.stage)) / p.total).coerceIn(0f, 1f) },
                         color = C.Accent, trackColor = C.Line, modifier = Modifier.fillMaxWidth(),
                     )
-                    Text("• Reading what's inside\n• Removing it\n• Opening the photo again to check", color = C.Sub, fontSize = 13.sp)
+                    if (p.title == "Removing hidden info") Text("• Reading what's inside\n• Removing it\n• Opening the photo again to check", color = C.Sub, fontSize = 13.sp)
+                    else Text("• Copying into Gallery's Trash\n• Removing from the folder", color = C.Sub, fontSize = 13.sp)
                 }
             },
             confirmButton = {},

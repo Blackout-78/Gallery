@@ -56,9 +56,10 @@ object Trash {
     }
 
     /** Moves photos into the trash. Returns how many moved, or -1 if you said no. */
-    suspend fun moveIn(context: Context, items: List<MediaItem>): Int {
+    suspend fun moveIn(context: Context, items: List<MediaItem>, onStep: (Int, Int) -> Unit = { _, _ -> }): Int {
         val copied = withContext(Dispatchers.IO) {
-            items.mapNotNull { item ->
+            items.mapIndexedNotNull { i, item ->
+                onStep(i, items.size)
                 runCatching {
                     val ext = item.name.substringAfterLast('.', "bin")
                     val f = File(dir, "${UUID.randomUUID()}.$ext")

@@ -228,7 +228,13 @@ object Actions {
     /** Moves to the app's trash. Returns true when done. */
     suspend fun delete(context: Context, items: List<MediaItem>): Boolean {
         if (items.isEmpty()) return false
-        val n = Trash.moveIn(context, items)
+        val big = items.size > 3
+        if (big) CleanUi.progress = CleanUi.Progress(0, items.size, "Copying", "Moving to Trash")
+        val n = try {
+            Trash.moveIn(context, items) { i, total -> if (big) CleanUi.progress = CleanUi.Progress(i, total, "Copying", "Moving to Trash") }
+        } finally {
+            CleanUi.progress = null
+        }
         when {
             n < 0 -> say(context, "Not deleted")
             n == 0 -> say(context, "Couldn't move to Trash")
