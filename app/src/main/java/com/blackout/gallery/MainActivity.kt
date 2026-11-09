@@ -64,7 +64,23 @@ class MainActivity : ComponentActivity() {
         }
         // After an update, put back the icon you chose.
         com.blackout.gallery.settings.AppIcon.syncAfterUpdate(this, com.blackout.gallery.data.Prefs.iconStyle, com.blackout.gallery.data.Prefs.iconMain, com.blackout.gallery.data.Prefs.iconSecond)
+        showCleanIfAsked(intent)
         setContent { GalleryTheme { PermissionGate { GalleryRoot() } } }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        showCleanIfAsked(intent)
+    }
+
+    // Tapping the notification brings the progress box back.
+    private fun showCleanIfAsked(intent: Intent?) {
+        if (intent?.getBooleanExtra(com.blackout.gallery.data.Notice.EXTRA_SHOW, false) == true) com.blackout.gallery.ui.CleanUi.hidden = false
+    }
+
+    override fun onPause() {
+        super.onPause()
+        GalleryApp.visible.value = false
     }
 
     override fun onStop() {
@@ -80,13 +96,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        GalleryApp.visible.value = true
+        com.blackout.gallery.data.Notice.cancelDone(this)
         if (hasRead(this)) GalleryState.refresh(this)
     }
 }
 
 private fun wanted(): Array<String> = when {
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ->
-        arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.ACCESS_MEDIA_LOCATION)
+        arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.ACCESS_MEDIA_LOCATION, Manifest.permission.POST_NOTIFICATIONS)
     Build.VERSION.SDK_INT == Build.VERSION_CODES.Q ->
         arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.ACCESS_MEDIA_LOCATION)
     else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.ACCESS_MEDIA_LOCATION)

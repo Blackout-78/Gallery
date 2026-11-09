@@ -21,6 +21,7 @@ class GalleryApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         Prefs.init(this)
         Trash.init(this)
         // Cleaned copies from the last share are no longer needed.
@@ -47,5 +48,8 @@ class GalleryApp : Application(), ImageLoaderFactory {
 
     companion object {
         val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        lateinit var instance: GalleryApp
+        /** True while Gallery is on screen. */
+        val visible = kotlinx.coroutines.flow.MutableStateFlow(false)
     }
 }

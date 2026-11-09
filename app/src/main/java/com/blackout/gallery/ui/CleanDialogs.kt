@@ -34,6 +34,8 @@ object CleanUi {
     data class Progress(val done: Int, val total: Int, val stage: String, val title: String = "Removing hidden info")
     var progress by mutableStateOf<Progress?>(null)
     var result by mutableStateOf<Privacy.CleanResult?>(null)
+    /** True after "Run in background": the box closes and the notification bar shows the progress. */
+    var hidden by mutableStateOf(false)
     /** Photos waiting for you to pick Standard or Maximum wipe. */
     var ask by mutableStateOf<List<com.blackout.gallery.data.MediaItem>?>(null)
     /** Goes up after each clean, so open screens re-check the photo. */
@@ -43,7 +45,7 @@ object CleanUi {
 @Composable
 fun CleanDialogs() {
     CleanUi.ask?.let { items -> ChooseLevelDialog(items) }
-    CleanUi.progress?.let { p ->
+    CleanUi.progress?.takeUnless { CleanUi.hidden && it.title == "Removing hidden info" }?.let { p ->
         var dots by remember { mutableIntStateOf(1) }
         LaunchedEffect(Unit) { while (true) { delay(400); dots = dots % 3 + 1 } }
         AlertDialog(
@@ -60,7 +62,9 @@ fun CleanDialogs() {
                     else if (p.title == "Moving to Trash") Text("• Copying into Gallery's Trash\n• Removing from the folder", color = C.Sub, fontSize = 13.sp)
                 }
             },
-            confirmButton = {},
+            confirmButton = {
+                if (p.title == "Removing hidden info") TextButton(onClick = { CleanUi.hidden = true }) { Text("Run in background", color = C.Accent) }
+            },
         )
     }
     CleanUi.result?.let { r -> ReportDialog(r) { CleanUi.result = null } }

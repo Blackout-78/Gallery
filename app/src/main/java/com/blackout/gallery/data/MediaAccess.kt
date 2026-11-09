@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 /**
@@ -20,8 +21,17 @@ object MediaAccess {
     fun canSkipAsking(context: Context): Boolean =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && MediaStore.canManageMedia(context)
 
-    private suspend fun ask(sender: IntentSender): Boolean =
-        withContext(Dispatchers.Main) { asker?.invoke(sender) ?: false }
+    private suspend fun ask(sender: IntentSender): Boolean = withContext(Dispatchers.Main) {
+        // Cleaning in the background: Android's box can only open on screen, so wait for you to come back.
+        val app = com.blackout.gallery.GalleryApp.instance
+        val visible = com.blackout.gallery.GalleryApp.visible
+        if (!visible.value) {
+            Notice.needTap(app, true)
+            visible.first { it }
+            Notice.needTap(app, false)
+        }
+        asker?.invoke(sender) ?: false
+    }
 
     suspend fun allowWrite(context: Context, uris: List<Uri>): Boolean {
         if (uris.isEmpty()) return true

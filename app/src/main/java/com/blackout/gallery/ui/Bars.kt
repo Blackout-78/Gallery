@@ -223,12 +223,30 @@ object Actions {
 
     /** Removes hidden info, then shows what was removed and the re-check. */
     suspend fun runClean(context: Context, items: List<MediaItem>, maximum: Boolean, scrub: Boolean) {
+        CleanUi.hidden = false
         CleanUi.progress = CleanUi.Progress(0, items.count { !it.isVideo }, "Starting")
+        val app = context.applicationContext
+        com.blackout.gallery.data.CleanService.begin(app)
         val r = try {
-            Privacy.cleanPhotos(context, items, maximum, scrub) { done, total, stage -> CleanUi.progress = CleanUi.Progress(done, total, stage) }
+            Privacy.cleanPhotos(context, items, maximum, scrub) { done, total, stage ->
+                CleanUi.progress = CleanUi.Progress(done, total, stage)
+                com.blackout.gallery.data.Notice.progress(app, done, total, stage)
+            }
         } finally {
             CleanUi.progress = null
+            com.blackout.gallery.data.CleanService.end(app)
         }
+        // Left the app or hid the box: say it's done in the notification bar.
+        if (r != null && (CleanUi.hidden || !com.blackout.gallery.GalleryApp.visible.value)) {
+            val n = r.reports.size
+            val title = when {
+                r.reports.any { it.leftover.isNotEmpty() } -> "Cleaning done · check found leftovers"
+                r.failed > 0 -> "Cleaning done · $n photo${if (n == 1) "" else "s"}, ${r.failed} couldn't be changed"
+                else -> "Hidden info removed · $n photo${if (n == 1) "" else "s"}"
+            }
+            com.blackout.gallery.data.Notice.finished(app, title)
+        }
+        CleanUi.hidden = false
         // The report always opens, even when nothing could be changed.
         CleanUi.result = r ?: Privacy.CleanResult(emptyList(), 0, items.count { !it.isVideo }, "Android's permission to change the photos wasn't given")
         if (r == null) return
