@@ -148,16 +148,12 @@ object Privacy {
                         step("Verifying")
                         reports += ItemReport(item.name, before, read(context, item), asCopy = false)
                     } else {
-                        // Formats like HEIC can't be changed in place: save a clean JPEG copy next to it.
+                        // Formats like HEIC can't be changed in place: a clean JPEG goes into the same folder
+                        // and replaces the original (no copy left behind, same album).
                         step("Removing")
-                        val bmp = rebuildBitmap(context, item, scrub && maximum)
-                        val copy = saveJpeg(context, bmp, item.name.substringBeforeLast('.') + ".jpg", if (item.relPath.startsWith("DCIM/") || item.relPath.startsWith("Pictures/")) item.relPath else "Pictures/")
-                        bmp.recycle()
-                        step("Verifying")
-                        val bytes = context.contentResolver.openInputStream(copy)?.use { it.readBytes() } ?: ByteArray(0)
-                        val after = (runCatching { rowsOf(ExifInterface(bytes.inputStream())) }.getOrDefault(emptyList())) +
-                            Deep.scan(bytes, "image/jpeg").map { Row(Kind.Extra, it.title, it.detail) }
-                        reports += ItemReport(item.name, before, after, asCopy = true, rebuilt = true, scrubbed = scrub && maximum)
+                        val fresh = wipeAsNew(context, item, false)
+                            ?: error("this folder doesn't take new files from apps, and this photo type can't be cleaned in place")
+                        replacements += Replacement(item, fresh.first, before, fresh.second)
                     }
                 }
                 result.exceptionOrNull()?.let { e ->
@@ -192,7 +188,7 @@ object Privacy {
                             val taken = resolver.query(r.fresh, arrayOf("datetaken"), null, null, null)?.use { c -> if (c.moveToFirst()) c.getLong(0) else 0L } ?: 0L
                             val fresh = r.item.copy(id = newId, uri = r.fresh)
                             val path = resolver.query(r.fresh, arrayOf("relative_path"), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
-                            reports += ItemReport(r.item.name, r.before, read(context, fresh), asCopy = false, rebuilt = true, scrubbed = scrub,
+                            reports += ItemReport(r.item.name, r.before, read(context, fresh), asCopy = false, rebuilt = maximum, scrubbed = scrub,
                                 dateKept = kotlin.math.abs(taken - r.item.taken) < 2000,
                                 newFolder = path?.takeIf { it != r.item.relPath }?.trimEnd('/'),
                                 originalGone = !exists(context, r.item.uri),
@@ -292,8 +288,9 @@ object Privacy {
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             })
         }.getOrNull()
-        // Same folder if Android allows it; otherwise a new folder with the same name inside Pictures.
-        val uri = insertAt(item.relPath) ?: insertAt(sameNameFolder(item)) ?: return null
+        // Always the photo's own folder, so it stays in the exact same album. If that folder won't take
+        // new files, return null and the photo is rebuilt in place instead (never moved anywhere else).
+        val uri = insertAt(item.relPath) ?: return null
         try {
             val bmp = rebuildBitmap(context, item, scrub)
             val bytes = java.io.ByteArrayOutputStream().also { bmp.compress(formatFor(mime), 95, it) }.toByteArray()
