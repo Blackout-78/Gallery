@@ -92,7 +92,7 @@ fun MoveDialog(items: List<MediaItem>, onDone: () -> Unit, onCancel: () -> Unit)
                                 Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { go(album.items.first().relPath, album.name) }.padding(vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Thumb(album.cover.uri, Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)).background(C.Card))
+                                Thumb(album.cover.uri, Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)).background(C.Card), com.blackout.gallery.data.Prefs.isBlurred(album.id))
                                 Column(Modifier.padding(start = 12.dp)) {
                                     Text(album.name, color = C.Text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text("${album.items.size} items", color = C.Sub, fontSize = 12.sp)

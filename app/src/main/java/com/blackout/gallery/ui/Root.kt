@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BlurOn
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.VerifiedUser
@@ -83,6 +84,9 @@ fun GalleryRoot() {
                             scope.launch {
                                 if (Actions.clean(context, GalleryState.items.filter { it.albumId in pickedAlbums })) pickedAlbums = emptySet()
                             }
+                        }
+                        BarAction(Icons.Outlined.BlurOn, if (pickedAlbums.all { Prefs.isBlurred(it) }) "Unblur" else "Blur") {
+                            Prefs.toggleBlur(pickedAlbums); pickedAlbums = emptySet()
                         }
                         BarAction(Icons.Outlined.CreateNewFolder, "Move") { moveAlbums = true }
                         BarAction(Icons.Outlined.Delete, "Delete", tint = C.Danger) { askDeleteAlbums = true }

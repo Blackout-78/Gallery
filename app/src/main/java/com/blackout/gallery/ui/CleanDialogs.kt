@@ -121,6 +121,17 @@ private fun ReportDialog(r: Privacy.CleanResult, onClose: () -> Unit) {
                 if (reports.any { it.rebuilt }) {
                     Bullet("✓ Rebuilt from pixels, then read back from storage byte for byte: no photo-info block, no hidden preview picture, no phone compression fingerprint", C.Good)
                 }
+                val checked = reports.filter { it.copies != null }
+                if (checked.isNotEmpty()) {
+                    val doubles = checked.filter { (it.copies ?: 1) > 1 || it.originalGone == false }
+                    if (doubles.isEmpty()) {
+                        Bullet("✓ No duplicates: ${checked.size} original${if (checked.size == 1) "" else "s"} deleted, exactly one copy of each photo in its folder", C.Good)
+                    } else {
+                        doubles.forEach { d ->
+                            Bullet("⚠ ${d.name}: " + if (d.originalGone == false) "the original is still there" else "${d.copies} files with this name in the folder", C.Warn)
+                        }
+                    }
+                }
                 if (reports.any { it.scrubbed }) Bullet("✓ Sensor noise scrubbed (photo keeps its size)", C.Good)
                 val kept = reports.count { it.dateKept == true }
                 val lost = reports.count { it.dateKept == false }

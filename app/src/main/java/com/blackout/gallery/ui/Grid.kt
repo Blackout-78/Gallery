@@ -32,8 +32,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -56,14 +59,19 @@ class Selection {
     fun clear() { ids = emptySet() }
 }
 
+/**
+ * A small square picture. [blurred] loads it at a tiny size and stretches it, so only colors show;
+ * on Android 12 and newer it's softened further. The full picture is never drawn in the grid.
+ */
 @Composable
-fun Thumb(model: Any, modifier: Modifier = Modifier) {
+fun Thumb(model: Any, modifier: Modifier = Modifier, blurred: Boolean = false) {
     val context = LocalContext.current
     AsyncImage(
-        model = ImageRequest.Builder(context).data(model).size(320).build(),
+        model = ImageRequest.Builder(context).data(model).size(if (blurred) 12 else 320)
+            .memoryCacheKey(if (blurred) "blur:$model" else model.toString()).build(),
         contentDescription = null,
         contentScale = ContentScale.Crop,
-        modifier = modifier,
+        modifier = if (blurred) modifier.blur(24.dp, BlurredEdgeTreatment.Rectangle) else modifier,
     )
 }
 
@@ -78,6 +86,7 @@ fun MediaGrid(
     selection: Selection,
     onOpen: (MediaItem) -> Unit,
     bottomPadding: Dp,
+    reveal: Boolean = false,
     header: LazyGridScope.() -> Unit = {},
 ) {
     val groups = remember(items, byDay) {
@@ -98,7 +107,7 @@ fun MediaGrid(
                 }
             }
             items(list, key = { it.id }) { item ->
-                Tile(item, item.id in selection.ids, selection.active,
+                Tile(item, item.id in selection.ids, selection.active, blurred = !reveal && Prefs.isBlurred(item.albumId),
                     onClick = { if (selection.active) selection.toggle(item.id) else onOpen(item) },
                     onLongClick = { selection.toggle(item.id) })
             }
@@ -108,13 +117,13 @@ fun MediaGrid(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun Tile(item: MediaItem, picked: Boolean, picking: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+fun Tile(item: MediaItem, picked: Boolean, picking: Boolean, blurred: Boolean = false, onClick: () -> Unit, onLongClick: () -> Unit) {
     Box(
         Modifier.aspectRatio(1f).background(C.Card)
             .then(if (picked) Modifier.border(3.dp, C.Accent) else Modifier)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
-        Thumb(item.uri, Modifier.fillMaxSize())
+        Thumb(item.uri, Modifier.fillMaxSize().clip(RectangleShape), blurred)
         if (item.isVideo) {
             Row(
                 Modifier.align(Alignment.BottomStart).padding(4.dp).clip(RoundedCornerShape(4.dp))

@@ -103,7 +103,9 @@ object Privacy {
     }
 
     /** What happened to one photo: what was removed, and what (if anything) was still there when re-checked. */
-    data class ItemReport(val name: String, val removed: List<Row>, val leftover: List<Row>, val asCopy: Boolean, val rebuilt: Boolean = false, val scrubbed: Boolean = false, val dateKept: Boolean? = null, val newFolder: String? = null)
+    data class ItemReport(val name: String, val removed: List<Row>, val leftover: List<Row>, val asCopy: Boolean, val rebuilt: Boolean = false, val scrubbed: Boolean = false, val dateKept: Boolean? = null, val newFolder: String? = null,
+        /** Maximum wipe duplicate check: the old file is gone, and how many copies of this photo are now in its folder (1 is right). */
+        val originalGone: Boolean? = null, val copies: Int? = null)
     data class CleanResult(val reports: List<ItemReport>, val skippedVideos: Int, val failed: Int, val error: String?)
 
     /**
@@ -127,12 +129,13 @@ object Privacy {
                 val result = runCatching {
                     step("Reading")
                     val before = read(context, item)
-                    if (canEditInPlace(item) && maximum) {
+                    if (maximum) {
                         step("Rebuilding")
                         val fresh = wipeAsNew(context, item, scrub)
                         if (fresh != null) {
-                            replacements += Replacement(item, fresh, before)
+                            replacements += Replacement(item, fresh.first, before, fresh.second)
                         } else {
+                            check(canEditInPlace(item)) { "this folder doesn't take new files, and this photo type can't be rebuilt in place" }
                             // This folder doesn't take new files from apps: rebuild in place instead.
                             check(MediaAccess.allowWrite(context, listOf(item.uri))) { "permission to change the photo wasn't given" }
                             wipeInPlace(context, item, scrub)
@@ -178,8 +181,11 @@ object Privacy {
                         onStep(i, replacements.size, "Verifying")
                         val ok = runCatching {
                             val resolver = context.contentResolver
+                            // The new file stayed hidden (pending) until now, so no app ever saw two copies.
+                            // If the app had been closed before this point, Android throws hidden files away by itself.
+                            resolver.update(r.fresh, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
                             // Now that the old file is gone, give the new one the original name and date.
-                            runCatching { resolver.update(r.fresh, ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, r.item.name) }, null, null) }
+                            runCatching { resolver.update(r.fresh, ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, r.name) }, null, null) }
                             runCatching { resolver.update(r.fresh, ContentValues().apply { put(MediaStore.MediaColumns.DATE_TAKEN, r.item.taken) }, null, null) }
                             val newId = android.content.ContentUris.parseId(r.fresh)
                             Prefs.replaceFavorite(r.item.id, newId)
@@ -188,7 +194,9 @@ object Privacy {
                             val path = resolver.query(r.fresh, arrayOf("relative_path"), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
                             reports += ItemReport(r.item.name, r.before, read(context, fresh), asCopy = false, rebuilt = true, scrubbed = scrub,
                                 dateKept = kotlin.math.abs(taken - r.item.taken) < 2000,
-                                newFolder = path?.takeIf { it != r.item.relPath }?.trimEnd('/'))
+                                newFolder = path?.takeIf { it != r.item.relPath }?.trimEnd('/'),
+                                originalGone = !exists(context, r.item.uri),
+                                copies = path?.let { copiesOf(context, it, r.name) })
                         }
                         ok.exceptionOrNull()?.let { e ->
                             failed++
@@ -207,19 +215,78 @@ object Privacy {
         return "Pictures/$name/"
     }
 
-    private class Replacement(val item: MediaItem, val fresh: Uri, val before: List<Row>)
+    private class Replacement(val item: MediaItem, val fresh: Uri, val before: List<Row>, val name: String)
+
+    /** True if the photo is still on the phone (not deleted). */
+    private fun exists(context: Context, uri: Uri): Boolean = runCatching {
+        context.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns._ID), null, null, null)?.use { it.count > 0 } ?: false
+    }.getOrDefault(true)
+
+    /**
+     * How many files in [relPath] are this photo: the name itself, or the "name (1).jpg" copies
+     * Android makes when two files share a name. After a Maximum wipe this should be exactly 1.
+     */
+    private fun copiesOf(context: Context, relPath: String, name: String): Int {
+        val base = name.substringBeforeLast('.')
+        val ext = name.substringAfterLast('.', "")
+        val same = Regex("^" + Regex.escape(base) + "( \\(\\d+\\))?" + (if (ext.isEmpty()) "" else "\\." + Regex.escape(ext)) + "$", RegexOption.IGNORE_CASE)
+        val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        return runCatching {
+            context.contentResolver.query(
+                collection, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME),
+                "${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND ${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
+                arrayOf(relPath, "$base%"), null,
+            )?.use { c ->
+                var n = 0
+                while (c.moveToNext()) if (same.matches(c.getString(0) ?: "")) n++
+                n
+            } ?: 1
+        }.getOrDefault(1)
+    }
+
+    /**
+     * Deletes rebuilt photos that were never finished, for example if the app was closed during a Maximum wipe.
+     * They are hidden (pending) files only this app can see, so nothing else is touched.
+     */
+    fun sweepLeftovers(context: Context) {
+        runCatching {
+            val resolver = context.contentResolver
+            var collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            val where = "${MediaStore.MediaColumns.IS_PENDING} = 1 AND ${MediaStore.MediaColumns.OWNER_PACKAGE_NAME} = ?"
+            val args = arrayOf(context.packageName)
+            val ids = mutableListOf<Long>()
+            val cursor = if (android.os.Build.VERSION.SDK_INT >= 30) {
+                resolver.query(collection, arrayOf(MediaStore.MediaColumns._ID), android.os.Bundle().apply {
+                    putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION, where)
+                    putStringArray(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, args)
+                    putInt(MediaStore.QUERY_ARG_MATCH_PENDING, MediaStore.MATCH_INCLUDE)
+                }, null)
+            } else {
+                @Suppress("DEPRECATION")
+                collection = MediaStore.setIncludePending(collection)
+                resolver.query(collection, arrayOf(MediaStore.MediaColumns._ID), where, args, null)
+            }
+            cursor?.use { c -> while (c.moveToNext()) ids += c.getLong(0) }
+            val base = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            ids.forEach { id -> runCatching { resolver.delete(android.content.ContentUris.withAppendedId(base, id), null, null) } }
+        }
+    }
 
     /**
      * Maximum wipe, timeline-safe: saves the rebuilt photo as a new file in the same folder,
      * with the original "date taken" given to Android's photo list. Null if the folder won't take new files.
      */
-    private fun wipeAsNew(context: Context, item: MediaItem, scrub: Boolean): Uri? {
+    private fun wipeAsNew(context: Context, item: MediaItem, scrub: Boolean): Pair<Uri, String>? {
         val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         val resolver = context.contentResolver
+        // HEIC and other types are rebuilt as JPEG, and then replace the original like the rest.
+        val keepType = canEditInPlace(item)
+        val mime = if (keepType) item.mime else "image/jpeg"
+        val name = if (keepType) item.name else item.name.substringBeforeLast('.') + ".jpg"
         fun insertAt(path: String) = runCatching {
             resolver.insert(collection, ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, item.name)
-                put(MediaStore.MediaColumns.MIME_TYPE, item.mime)
+                put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                put(MediaStore.MediaColumns.MIME_TYPE, mime)
                 put(MediaStore.MediaColumns.RELATIVE_PATH, path)
                 put(MediaStore.MediaColumns.DATE_TAKEN, item.taken)
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
@@ -229,15 +296,14 @@ object Privacy {
         val uri = insertAt(item.relPath) ?: insertAt(sameNameFolder(item)) ?: return null
         try {
             val bmp = rebuildBitmap(context, item, scrub)
-            val bytes = java.io.ByteArrayOutputStream().also { bmp.compress(formatFor(item.mime), 95, it) }.toByteArray()
+            val bytes = java.io.ByteArrayOutputStream().also { bmp.compress(formatFor(mime), 95, it) }.toByteArray()
             bmp.recycle()
             resolver.openOutputStream(uri, "w")!!.use { it.write(bytes) }
             val saved = resolver.openInputStream(uri)!!.use { it.readBytes() }
             check(saved.contentEquals(bytes)) { "the phone didn't save the rebuilt photo" }
             check(!Deep.hasExif(saved)) { "the saved photo still has a photo-info block" }
-            resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
-            runCatching { resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.DATE_TAKEN, item.taken) }, null, null) }
-            return uri
+            // Stays hidden (pending) until the original is deleted, so there is never a visible duplicate.
+            return uri to name
         } catch (e: Exception) {
             runCatching { resolver.delete(uri, null, null) }
             throw e

@@ -25,6 +25,7 @@ object Prefs {
     private val _shareMax = mutableStateOf(true)
     private val _shareScrub = mutableStateOf(false)
     private val _favorites = mutableStateOf(emptySet<Long>())
+    private val _blurred = mutableStateOf(emptySet<Long>())
 
     fun init(context: Context) {
         sp = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -43,6 +44,7 @@ object Prefs {
         _shareMax.value = sp.getBoolean("shareMax", true)
         _shareScrub.value = sp.getBoolean("shareScrub", false)
         _favorites.value = sp.getStringSet("favorites", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet()
+        _blurred.value = sp.getStringSet("blurredAlbums", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet()
     }
 
     var accent: Int
@@ -85,6 +87,18 @@ object Prefs {
     val favorites: Set<Long> get() = _favorites.value
 
     fun isFavorite(id: Long) = id in _favorites.value
+
+    /** Albums whose pictures show blurred in the grids. Opening a photo shows it clearly. */
+    val blurredAlbums: Set<Long> get() = _blurred.value
+    fun isBlurred(albumId: Long) = albumId in _blurred.value
+
+    /** Blurs all of them, or un-blurs all of them if every one is already blurred. */
+    fun toggleBlur(albumIds: Collection<Long>) {
+        val now = _blurred.value
+        val next = if (albumIds.all { it in now }) now - albumIds.toSet() else now + albumIds
+        _blurred.value = next
+        sp.edit().putStringSet("blurredAlbums", next.map { it.toString() }.toSet()).apply()
+    }
 
     /** Keeps the heart when a photo is replaced by its rebuilt copy. */
     fun replaceFavorite(old: Long, new: Long) {

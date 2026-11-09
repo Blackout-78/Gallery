@@ -25,6 +25,8 @@ class GalleryApp : Application(), ImageLoaderFactory {
         Trash.init(this)
         // Cleaned copies from the last share are no longer needed.
         appScope.launch(Dispatchers.IO) { File(cacheDir, "shared").deleteRecursively() }
+        // A Maximum wipe cut short (app closed mid-way) leaves hidden half-made copies: remove them.
+        appScope.launch(Dispatchers.IO) { com.blackout.gallery.data.Privacy.sweepLeftovers(this@GalleryApp) }
         appScope.launch { Trash.purge(this@GalleryApp) }
         // Reload when photos are added or removed by the camera or another app.
         val handler = Handler(Looper.getMainLooper())

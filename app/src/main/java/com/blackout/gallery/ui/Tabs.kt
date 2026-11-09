@@ -37,7 +37,11 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.BlurOff
+import androidx.compose.material.icons.outlined.BlurOn
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -125,8 +129,13 @@ fun AlbumsTab(query: String, onQuery: (String) -> Unit, picked: Set<Long>, onPic
                 val on = album.id in picked
                 Column(Modifier.combinedClickable(onClick = { if (picked.isNotEmpty()) toggle(album.id) else onAlbum(album) }, onLongClick = { toggle(album.id) })) {
                     Box {
-                        Thumb(album.cover.uri, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(C.Card)
-                            .then(if (on) Modifier.border(3.dp, C.Accent, RoundedCornerShape(12.dp)) else Modifier))
+                        val blurred = Prefs.isBlurred(album.id)
+                        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(C.Card)
+                            .then(if (on) Modifier.border(3.dp, C.Accent, RoundedCornerShape(12.dp)) else Modifier)) {
+                            Thumb(album.cover.uri, Modifier.fillMaxSize(), blurred)
+                            if (blurred) Icon(Icons.Outlined.BlurOn, "Blurred", tint = Color.White,
+                                modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).size(22.dp))
+                        }
                         if (picked.isNotEmpty()) Box(
                             Modifier.align(Alignment.TopStart).padding(8.dp).size(24.dp).clip(CircleShape)
                                 .background(if (on) C.Accent else Color.Black.copy(alpha = 0.35f)).border(2.dp, Color.White, CircleShape),
@@ -186,13 +195,22 @@ fun AlbumScreen(albumId: Long, selection: Selection, onBack: () -> Unit, onOpen:
     if (askDelete) DeleteAlbumsDialog(setOf(albumId), onDone = { askDelete = false; onBack() }, onCancel = { askDelete = false })
     val all = GalleryState.items.filter { it.albumId == albumId }
     val list = all.ordered(Prefs.sort)
+    val blurred = Prefs.isBlurred(albumId)
+    // "Show" un-blurs only while you're looking at this album; it's blurred again next time.
+    var reveal by remember(albumId) { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         if (selection.active) SelectTopBar(selection, list) else TitleBar(all.firstOrNull()?.album ?: "Album", "${list.size} items", onBack) {
+            if (blurred) IconButton(onClick = { reveal = !reveal }) {
+                Icon(if (reveal) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, if (reveal) "Hide again" else "Show for now", tint = C.Text)
+            }
+            IconButton(onClick = { Prefs.toggleBlur(listOf(albumId)); reveal = false }) {
+                Icon(if (blurred) Icons.Outlined.BlurOff else Icons.Outlined.BlurOn, if (blurred) "Stop blurring album" else "Blur album", tint = if (blurred) C.Accent else C.Text)
+            }
             IconButton(onClick = { scope.launch { Actions.clean(context, all) } }) { Icon(Icons.Outlined.VerifiedUser, "Remove hidden info from album", tint = C.Accent) }
             IconButton(onClick = { askDelete = true }) { Icon(Icons.Outlined.Delete, "Delete album", tint = C.Text) }
         }
         if (list.isEmpty()) EmptyNote("This album is empty")
-        else MediaGrid(list, Prefs.sort == Sort.Newest || Prefs.sort == Sort.Oldest, selection, { onOpen(list, it) }, 16.dp)
+        else MediaGrid(list, Prefs.sort == Sort.Newest || Prefs.sort == Sort.Oldest, selection, { onOpen(list, it) }, 16.dp, reveal = reveal)
     }
 }
 
