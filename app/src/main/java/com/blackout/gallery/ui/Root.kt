@@ -36,6 +36,11 @@ private sealed interface Screen {
     data object TrashView : Screen
 }
 
+/** A photo another app asked Gallery to open. */
+object OpenRequest {
+    var id by mutableStateOf<Long?>(null)
+}
+
 @Composable
 fun GalleryRoot() {
     var tab by rememberSaveable { mutableStateOf(Prefs.startTab) }
@@ -53,6 +58,22 @@ fun GalleryRoot() {
     fun push(s: Screen) { selection.clear(); stack = stack + s }
     fun pop() { selection.clear(); stack = stack.dropLast(1) }
     val open: (List<MediaItem>, MediaItem) -> Unit = { list, item -> push(Screen.Viewer(list.map { it.id }, item.id)) }
+
+    // Open a photo sent from Camera or another app. A brand-new photo may need one reload to appear.
+    val wanted = OpenRequest.id
+    var tries by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    androidx.compose.runtime.LaunchedEffect(wanted, GalleryState.items) {
+        val id = wanted ?: return@LaunchedEffect
+        val item = GalleryState.items.firstOrNull { it.id == id }
+        if (item == null) {
+            if (tries++ < 3) GalleryState.refresh(context) else { OpenRequest.id = null; tries = 0 }
+            return@LaunchedEffect
+        }
+        OpenRequest.id = null; tries = 0
+        val album = GalleryState.items.filter { it.albumId == item.albumId }.sortedByDescending { it.taken }
+        selection.clear()
+        stack = listOf(Screen.Viewer(album.map { it.id }, item.id))
+    }
 
     BackHandler(enabled = selection.active || pickedAlbums.isNotEmpty() || stack.isNotEmpty()) {
         when {

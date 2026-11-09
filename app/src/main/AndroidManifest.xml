@@ -40,6 +40,13 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
+            <!-- Lets Camera (or any app) open a photo or video straight in Gallery's viewer. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="image/*" />
+                <data android:scheme="content" android:mimeType="video/*" />
+            </intent-filter>
         </activity>
 
         <!-- The app drawer icon. Settings > App icon switches to one of the ready-made designs below. -->
