@@ -36,6 +36,8 @@ object CleanUi {
     var result by mutableStateOf<Privacy.CleanResult?>(null)
     /** True after "Run in background": the box closes and the notification bar shows the progress. */
     var hidden by mutableStateOf(false)
+    /** Duplicate groups waiting for you to confirm removal. */
+    var dups by mutableStateOf<List<com.blackout.gallery.data.Duplicates.Group>?>(null)
     /** Photos waiting for you to pick Standard or Maximum wipe. */
     var ask by mutableStateOf<List<com.blackout.gallery.data.MediaItem>?>(null)
     /** Goes up after each clean, so open screens re-check the photo. */
@@ -59,6 +61,7 @@ fun CleanDialogs() {
                         color = C.Accent, trackColor = C.Line, modifier = Modifier.fillMaxWidth(),
                     )
                     if (p.title == "Removing hidden info") Text("• Reading what's inside\n• Removing it (or rebuilding from pixels)\n• Opening the photo again to check", color = C.Sub, fontSize = 13.sp)
+                    else if (p.title == "Finding duplicates") Text("Comparing every photo by how it looks, in all albums", color = C.Sub, fontSize = 13.sp)
                     else if (p.title == "Moving to Trash") Text("• Copying into Gallery's Trash\n• Removing from the folder", color = C.Sub, fontSize = 13.sp)
                 }
             },
@@ -68,6 +71,34 @@ fun CleanDialogs() {
         )
     }
     CleanUi.result?.let { r -> ReportDialog(r) { CleanUi.result = null } }
+    CleanUi.dups?.let { groups -> DuplicatesDialog(groups) }
+}
+
+@Composable
+private fun DuplicatesDialog(groups: List<com.blackout.gallery.data.Duplicates.Group>) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val extras = groups.sumOf { it.extras.size }
+    AlertDialog(
+        onDismissRequest = { CleanUi.dups = null },
+        title = { Text("$extras duplicate${if (extras == 1) "" else "s"} found") },
+        text = {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("The same picture is saved more than once. One of each is kept: the cleaned copy if there is one, otherwise the best quality.", color = C.Sub, fontSize = 13.sp)
+                groups.take(40).forEach { g ->
+                    Bullet("Keep ${g.keep.name} (${g.keep.album}) · remove ${g.extras.joinToString { "${it.name} (${it.album})" }}")
+                }
+                if (groups.size > 40) Text("…and ${groups.size - 40} more", color = C.Sub, fontSize = 13.sp)
+                Text("Removed copies go to Trash, so you can put them back.", color = C.Sub, fontSize = 12.sp)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                CleanUi.dups = null
+                com.blackout.gallery.GalleryApp.appScope.launch { Actions.removeDuplicates(context, groups) }
+            }) { Text("Remove $extras", color = C.Danger) }
+        },
+        dismissButton = { TextButton(onClick = { CleanUi.dups = null }) { Text("Cancel") } },
+    )
 }
 
 private fun stageShare(stage: String) = when (stage) { "Removing", "Rebuilding" -> 0.33f; "Verifying" -> 0.66f; else -> 0f }

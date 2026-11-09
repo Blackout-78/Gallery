@@ -1,5 +1,7 @@
 package com.blackout.gallery.ui
 
+import com.blackout.gallery.data.Duplicates
+
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
@@ -251,7 +253,37 @@ object Actions {
         CleanUi.result = r ?: Privacy.CleanResult(emptyList(), 0, items.count { !it.isVideo }, "Android's permission to change the photos wasn't given")
         if (r == null) return
         CleanUi.version++
+        // Other copies of the photos just cleaned (any album, blurred or not) go to Trash.
+        if (Prefs.dupAfterClean) {
+            GalleryState.reload(context)
+            val albums = items.map { it.album }.toSet()
+            val groups = runCatching {
+                Duplicates.find(context, GalleryState.items) { _, _ -> }.filter { g -> (g.extras + g.keep).any { it.album in albums } }
+            }.getOrDefault(emptyList())
+            val extras = groups.flatMap { it.extras }
+            if (extras.isNotEmpty()) {
+                val n = Trash.moveIn(context, extras)
+                if (n > 0) say(context, "Removed $n duplicate${if (n == 1) "" else "s"} · in Trash for ${Prefs.trashDays} days")
+            }
+        }
         GalleryState.refreshSoon(context)
+    }
+
+    /** Finds the same photo saved more than once across all albums, then asks before removing. */
+    suspend fun findDuplicates(context: Context) {
+        val all = GalleryState.items
+        CleanUi.progress = CleanUi.Progress(0, all.count { !it.isVideo }, "Checking", "Finding duplicates")
+        val groups = try {
+            Duplicates.find(context, all) { i, total -> CleanUi.progress = CleanUi.Progress(i, total, "Checking", "Finding duplicates") }
+        } finally { CleanUi.progress = null }
+        if (groups.isEmpty()) say(context, "No duplicates found") else CleanUi.dups = groups
+    }
+
+    suspend fun removeDuplicates(context: Context, groups: List<Duplicates.Group>) {
+        val extras = groups.flatMap { it.extras }
+        val n = Trash.moveIn(context, extras)
+        say(context, if (n > 0) "Removed $n duplicate${if (n == 1) "" else "s"} · in Trash for ${Prefs.trashDays} days" else "Nothing removed")
+        GalleryState.refresh(context)
     }
 
     /** Moves to the app's trash. Returns true when done. */

@@ -96,6 +96,16 @@ fun SettingsScreen(bottom: Dp) {
                 color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(vertical = 10.dp))
         }
 
+        Section("DUPLICATES") {
+            SettingRow("Find duplicate photos", "Same picture saved more than once, in any album, blurred or not",
+                onClick = { com.blackout.gallery.GalleryApp.appScope.launch { com.blackout.gallery.ui.Actions.findDuplicates(context) } }) {
+                Text("›", color = C.Sub, fontSize = 20.sp)
+            }
+            SettingRow("Remove duplicates after cleaning", "Other copies of cleaned photos go to Trash", divider = false) {
+                Switch(checked = Prefs.dupAfterClean, onCheckedChange = { Prefs.dupAfterClean = it }, colors = switchColors())
+            }
+        }
+
         Section("TRASH") {
             var days by remember { mutableFloatStateOf(Prefs.trashDays.toFloat()) }
             Row(Modifier.fillMaxWidth().padding(top = 12.dp)) {

@@ -97,6 +97,13 @@ object GalleryState {
         }
     }
 
+    /** Reloads now and waits for it to finish. */
+    suspend fun reload(context: Context) {
+        pending?.cancel()
+        items = withContext(Dispatchers.IO) { runCatching { query(context.applicationContext) }.getOrDefault(items) }
+        loaded = true
+    }
+
     /** Waits a moment so a burst of changes reloads once. */
     fun refreshSoon(context: Context) {
         val app = context.applicationContext
