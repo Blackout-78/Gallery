@@ -2,6 +2,19 @@
 
 A private photo gallery for Android. Fully offline: no internet permission, nothing collected.
 
+## Screens
+
+These are design previews. The finished app follows this look.
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/01-photos.png" width="180" alt="Photos"></td>
+    <td><img src="docs/screenshots/02-albums.png" width="180" alt="Albums"></td>
+    <td><img src="docs/screenshots/03-remove-hidden-info.png" width="180" alt="Remove hidden info"></td>
+    <td><img src="docs/screenshots/04-settings.png" width="180" alt="Settings"></td>
+  </tr>
+</table>
+
 ## Features
 - **Photos, Albums, Favorites, Settings** tabs
 - Search and sort (newest, oldest, name, size)
