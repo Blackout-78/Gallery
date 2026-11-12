@@ -20,6 +20,7 @@ object Prefs {
     private val _trashDays = mutableIntStateOf(30)
     private val _dupAfterClean = mutableStateOf(true)
     private val _autoScan = mutableStateOf(true)
+    private val _excluded = mutableStateOf(emptySet<String>())
     private val _cleanOnEdit = mutableStateOf(true)
     private val _iconStyle = mutableStateOf("A")
     private val _iconMain = mutableIntStateOf(DEFAULT_ACCENT)
@@ -39,6 +40,7 @@ object Prefs {
         _trashDays.intValue = sp.getInt("trashDays", 30)
         _dupAfterClean.value = sp.getBoolean("dupAfterClean", true)
         _autoScan.value = sp.getBoolean("autoScan", true)
+        _excluded.value = sp.getStringSet("excludedFolders", emptySet())!!.toSet()
         _cleanOnEdit.value = sp.getBoolean("cleanOnEdit", true)
         _iconStyle.value = sp.getString("iconStyle", "A") ?: "A"
         _iconMain.intValue = sp.getInt("iconMain", DEFAULT_ACCENT)
@@ -66,10 +68,22 @@ object Prefs {
     var sort: Sort
         get() = _sort.value
         set(v) { _sort.value = v; sp.edit().putString("sort", v.name).apply() }
-    /** After cleaning, other copies of the same photos go to Trash. */
+    /** Finds photos Android hasn't listed yet (transfers, downloads, new folders). */
     var autoScan: Boolean
         get() = _autoScan.value
         set(v) { _autoScan.value = v; sp.edit().putBoolean("autoScan", v).apply() }
+    /** Folders you turned off. Their photos are hidden from Gallery. Paths look like "DCIM/Camera/". */
+    val excludedFolders: Set<String> get() = _excluded.value
+    fun isExcluded(folder: String) = folder in _excluded.value
+    fun setFolderShown(folder: String, shown: Boolean) {
+        _excluded.value = if (shown) _excluded.value - folder else _excluded.value + folder
+        sp.edit().putStringSet("excludedFolders", _excluded.value).apply()
+    }
+    fun showAllFolders() {
+        _excluded.value = emptySet()
+        sp.edit().remove("excludedFolders").apply()
+    }
+    /** After cleaning, other copies of the same photos go to Trash. */
     var dupAfterClean: Boolean
         get() = _dupAfterClean.value
         set(v) { _dupAfterClean.value = v; sp.edit().putBoolean("dupAfterClean", v).apply() }

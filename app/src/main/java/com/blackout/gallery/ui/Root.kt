@@ -34,6 +34,7 @@ private sealed interface Screen {
     data class AlbumView(val id: Long) : Screen
     data class Edit(val item: MediaItem) : Screen
     data object TrashView : Screen
+    data object FoldersView : Screen
 }
 
 /** A photo another app asked Gallery to open. */
@@ -91,7 +92,7 @@ fun GalleryRoot() {
                     when (tab) {
                         "Albums" -> AlbumsTab(albumsQuery, { albumsQuery = it }, pickedAlbums, { pickedAlbums = it }, bottom, { push(Screen.AlbumView(it.id)) }, { push(Screen.TrashView) })
                         "Favorites" -> FavoritesTab(favQuery, { favQuery = it }, selection, bottom, open)
-                        "Settings" -> SettingsScreen(bottom)
+                        "Settings" -> SettingsScreen(bottom) { push(Screen.FoldersView) }
                         else -> PhotosTab(photosQuery, { photosQuery = it }, selection, bottom, open)
                     }
                 }
@@ -122,6 +123,7 @@ fun GalleryRoot() {
             is Screen.Viewer -> ViewerScreen(top.ids, top.start, ::pop) { push(Screen.Edit(it)) }
             is Screen.Edit -> EditorScreen(top.item, ::pop)
             Screen.TrashView -> Box(Modifier.fillMaxSize().statusBarsPadding()) { TrashScreen(::pop) }
+            Screen.FoldersView -> Box(Modifier.fillMaxSize().statusBarsPadding()) { FoldersScreen(::pop) }
         }
         if (askDeleteAlbums) DeleteAlbumsDialog(pickedAlbums, onDone = { askDeleteAlbums = false; pickedAlbums = emptySet() }, onCancel = { askDeleteAlbums = false })
         if (moveAlbums) MoveDialog(GalleryState.items.filter { it.albumId in pickedAlbums },

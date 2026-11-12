@@ -64,20 +64,22 @@ object AutoScan {
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.MediaColumns.DATA), null, null, null,
         )?.use { c -> while (c.moveToNext()) c.getString(0)?.let { known += it } }
         val out = ArrayList<String>()
-        walk(Environment.getExternalStorageDirectory(), 0, true, known, out)
+        val root = Environment.getExternalStorageDirectory()
+        walk(root, root, 0, known, out)
         return out
     }
 
-    private fun walk(dir: File, depth: Int, root: Boolean, known: Set<String>, out: MutableList<String>) {
+    private fun walk(root: File, dir: File, depth: Int, known: Set<String>, out: MutableList<String>) {
         if (depth > MAX_DEPTH || out.size >= MAX_FILES) return
+        if (dir != root && Prefs.isExcluded(Folders.pathOf(root, dir))) return
         val kids = dir.listFiles() ?: return
         // A folder with .nomedia is hidden on purpose: leave it alone.
         if (kids.any { it.name == ".nomedia" }) return
         for (f in kids) {
             if (out.size >= MAX_FILES) return
             if (f.isDirectory) {
-                if (f.name.startsWith(".") || (root && f.name == "Android")) continue
-                walk(f, depth + 1, false, known, out)
+                if (f.name.startsWith(".") || (dir == root && f.name == "Android")) continue
+                walk(root, f, depth + 1, known, out)
             } else if (f.extension.lowercase() in IMAGE && f.length() > 0 && f.absolutePath !in known) {
                 out += f.absolutePath
             }

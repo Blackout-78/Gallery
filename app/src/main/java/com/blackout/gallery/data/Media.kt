@@ -129,6 +129,7 @@ object GalleryState {
                 val id = c.getLong(0)
                 val video = c.getInt(1) == 3
                 val base = if (video) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                if (Prefs.isExcluded(c.getString(6) ?: "")) continue
                 val taken = c.getLong(7).takeIf { it > 0 } ?: (c.getLong(8) * 1000)
                 out += MediaItem(
                     id = id,

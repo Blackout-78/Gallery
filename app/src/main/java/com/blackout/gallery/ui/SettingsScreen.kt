@@ -58,7 +58,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @Composable
-fun SettingsScreen(bottom: Dp) {
+fun SettingsScreen(bottom: Dp, onFolders: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var colorPicker by remember { mutableStateOf(false) }
@@ -96,7 +96,10 @@ fun SettingsScreen(bottom: Dp) {
                 color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(vertical = 10.dp))
         }
 
-        Section("NEW PHOTOS") {
+        Section("FOLDERS") {
+            SettingRow("Choose folders", "${Prefs.excludedFolders.size} hidden. Switch folders on or off", onClick = onFolders) {
+                Text("›", color = C.Sub, fontSize = 20.sp)
+            }
             SettingRow("Find new photos automatically", "Photos from transfers, downloads or new folders appear here without a restart", divider = false) {
                 Switch(checked = Prefs.autoScan, onCheckedChange = { Prefs.autoScan = it }, colors = switchColors())
             }
