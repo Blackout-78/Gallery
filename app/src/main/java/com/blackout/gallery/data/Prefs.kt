@@ -19,6 +19,7 @@ object Prefs {
     private val _sort = mutableStateOf(Sort.Newest)
     private val _trashDays = mutableIntStateOf(30)
     private val _dupAfterClean = mutableStateOf(true)
+    private val _autoScan = mutableStateOf(true)
     private val _cleanOnEdit = mutableStateOf(true)
     private val _iconStyle = mutableStateOf("A")
     private val _iconMain = mutableIntStateOf(DEFAULT_ACCENT)
@@ -37,6 +38,7 @@ object Prefs {
         _sort.value = runCatching { Sort.valueOf(sp.getString("sort", "Newest")!!) }.getOrDefault(Sort.Newest)
         _trashDays.intValue = sp.getInt("trashDays", 30)
         _dupAfterClean.value = sp.getBoolean("dupAfterClean", true)
+        _autoScan.value = sp.getBoolean("autoScan", true)
         _cleanOnEdit.value = sp.getBoolean("cleanOnEdit", true)
         _iconStyle.value = sp.getString("iconStyle", "A") ?: "A"
         _iconMain.intValue = sp.getInt("iconMain", DEFAULT_ACCENT)
@@ -65,6 +67,9 @@ object Prefs {
         get() = _sort.value
         set(v) { _sort.value = v; sp.edit().putString("sort", v.name).apply() }
     /** After cleaning, other copies of the same photos go to Trash. */
+    var autoScan: Boolean
+        get() = _autoScan.value
+        set(v) { _autoScan.value = v; sp.edit().putBoolean("autoScan", v).apply() }
     var dupAfterClean: Boolean
         get() = _dupAfterClean.value
         set(v) { _dupAfterClean.value = v; sp.edit().putBoolean("dupAfterClean", v).apply() }

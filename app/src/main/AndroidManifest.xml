@@ -35,6 +35,15 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- A finished download: check for new photos even when Gallery is closed. -->
+        <receiver
+            android:name=".data.DownloadDoneReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
+            </intent-filter>
+        </receiver>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -29,6 +29,7 @@ class GalleryApp : Application(), ImageLoaderFactory {
         // A Maximum wipe cut short (app closed mid-way) leaves hidden half-made copies: remove them.
         appScope.launch(Dispatchers.IO) { com.blackout.gallery.data.Privacy.sweepLeftovers(this@GalleryApp) }
         appScope.launch { Trash.purge(this@GalleryApp) }
+        com.blackout.gallery.data.AutoScan.watchWhileVisible(this)
         // Reload when photos are added or removed by the camera or another app.
         val handler = Handler(Looper.getMainLooper())
         contentResolver.registerContentObserver(

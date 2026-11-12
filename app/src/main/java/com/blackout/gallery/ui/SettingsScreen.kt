@@ -96,6 +96,12 @@ fun SettingsScreen(bottom: Dp) {
                 color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(vertical = 10.dp))
         }
 
+        Section("NEW PHOTOS") {
+            SettingRow("Find new photos automatically", "Photos from transfers, downloads or new folders appear here without a restart", divider = false) {
+                Switch(checked = Prefs.autoScan, onCheckedChange = { Prefs.autoScan = it }, colors = switchColors())
+            }
+        }
+
         Section("DUPLICATES") {
             SettingRow("Find duplicate photos", "Same picture saved more than once, in any album, blurred or not",
                 onClick = { com.blackout.gallery.GalleryApp.appScope.launch { com.blackout.gallery.ui.Actions.findDuplicates(context) } }) {
