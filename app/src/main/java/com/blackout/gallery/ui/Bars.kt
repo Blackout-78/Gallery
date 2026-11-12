@@ -109,8 +109,10 @@ private val TAB_ICONS = mapOf(
 /** The rounded bar at the bottom: Photos, Albums, Favorites, Settings. */
 @Composable
 fun TabBar(current: String, onTab: (String) -> Unit) {
+    Column(Modifier.navigationBarsPadding()) {
+    Text(com.blackout.gallery.Version.tag, color = C.Sub, fontSize = 10.sp, modifier = Modifier.padding(start = 20.dp, bottom = 2.dp).clickable { onTab("Settings") })
     Row(
-        Modifier.navigationBarsPadding().padding(start = 12.dp, end = 12.dp, bottom = 12.dp).fillMaxWidth()
+        Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp).fillMaxWidth()
             .clip(RoundedCornerShape(24.dp)).background(C.Card).padding(horizontal = 8.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceAround,
     ) {
@@ -124,6 +126,7 @@ fun TabBar(current: String, onTab: (String) -> Unit) {
                 Text(tab, fontSize = 11.sp, color = if (on) C.Accent else C.Sub, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium)
             }
         }
+    }
     }
 }
 

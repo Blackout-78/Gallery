@@ -156,6 +156,7 @@ fun SettingsScreen(bottom: Dp, onFolders: () -> Unit = {}) {
         }
         Text("Gallery works fully offline. It has no internet permission and collects nothing.",
             color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp))
+        Text(com.blackout.gallery.Version.full, color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp))
     }
 
     if (colorPicker) {

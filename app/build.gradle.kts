@@ -16,6 +16,8 @@ android {
         val build = (project.findProperty("buildNumber") as String?)?.toIntOrNull() ?: 1
         versionCode = build
         versionName = "1.0.$build"
+        buildConfigField("String", "BUILD_NUMBER", "\"${System.getenv("GITHUB_RUN_NUMBER") ?: "dev"}\"")
+        buildConfigField("String", "GIT_SHA", "\"${(System.getenv("GITHUB_SHA") ?: "local").take(7)}\"")
     }
 
     // The release key comes from GitHub's secret settings. It never goes in the repository.
@@ -46,6 +48,7 @@ android {
         jvmTarget = "17"
     }
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 }
