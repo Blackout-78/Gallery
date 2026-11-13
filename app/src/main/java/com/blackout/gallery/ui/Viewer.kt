@@ -236,7 +236,7 @@ private fun HiddenInfoCard(item: MediaItem) {
             }
             Text(
                 if (showFile) "Hide file check" else "File check: show every block in this file",
-                color = C.Accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                color = C.AccentInk, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clickable { showFile = !showFile }.padding(vertical = 4.dp),
             )
             if (showFile) {

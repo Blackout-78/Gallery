@@ -120,7 +120,7 @@ fun SettingsScreen(bottom: Dp, onFolders: () -> Unit = {}) {
             Row(Modifier.fillMaxWidth().padding(top = 12.dp)) {
                 Text("Keep deleted items", color = C.Text, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                 val d = days.roundToInt()
-                Text("$d day${if (d == 1) "" else "s"}", color = C.Accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("$d day${if (d == 1) "" else "s"}", color = C.AccentInk, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             }
             Slider(
                 value = days, onValueChange = { days = it }, valueRange = 1f..30f, steps = 28,

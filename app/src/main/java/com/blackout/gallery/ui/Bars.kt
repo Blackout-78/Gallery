@@ -169,7 +169,7 @@ fun SelectBottomBar(selection: Selection) {
         horizontalArrangement = Arrangement.SpaceAround,
     ) {
         BarAction(Icons.Outlined.Share, "Share") { scope.launch { Actions.share(context, picked()) } }
-        BarAction(Icons.Outlined.VerifiedUser, "Clean info", tint = C.Accent) {
+        BarAction(Icons.Outlined.VerifiedUser, "Clean info", tint = C.AccentInk) {
             scope.launch { if (Actions.clean(context, picked())) selection.clear() }
         }
         val allFav = selection.ids.isNotEmpty() && selection.ids.all { Prefs.isFavorite(it) }

@@ -58,7 +58,7 @@ fun CleanDialogs() {
                     Text("Photo ${minOf(p.done + 1, p.total)} of ${p.total} · ${p.stage}" + ".".repeat(dots), color = C.Text, fontSize = 15.sp)
                     LinearProgressIndicator(
                         progress = { if (p.total == 0) 0f else ((p.done + stageShare(p.stage)) / p.total).coerceIn(0f, 1f) },
-                        color = C.Accent, trackColor = C.Line, modifier = Modifier.fillMaxWidth(),
+                        color = C.AccentInk, trackColor = C.Line, modifier = Modifier.fillMaxWidth(),
                     )
                     if (p.title == "Removing hidden info") Text("• Reading what's inside\n• Removing it (or rebuilding from pixels)\n• Opening the photo again to check", color = C.Sub, fontSize = 13.sp)
                     else if (p.title == "Finding duplicates") Text("Comparing every photo by how it looks, in all albums", color = C.Sub, fontSize = 13.sp)
@@ -66,7 +66,7 @@ fun CleanDialogs() {
                 }
             },
             confirmButton = {
-                if (p.title == "Removing hidden info") TextButton(onClick = { CleanUi.hidden = true }) { Text("Run in background", color = C.Accent) }
+                if (p.title == "Removing hidden info") TextButton(onClick = { CleanUi.hidden = true }) { Text("Run in background", color = C.AccentInk) }
             },
         )
     }

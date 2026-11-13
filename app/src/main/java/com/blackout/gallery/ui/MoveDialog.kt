@@ -82,9 +82,9 @@ fun MoveDialog(items: List<MediaItem>, onDone: () -> Unit, onCancel: () -> Unit)
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)).background(C.Card), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Outlined.CreateNewFolder, null, tint = C.Accent)
+                            Icon(Icons.Outlined.CreateNewFolder, null, tint = C.AccentInk)
                         }
-                        Text("New album", color = C.Accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 12.dp))
+                        Text("New album", color = C.AccentInk, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 12.dp))
                     }
                     LazyColumn(Modifier.heightIn(max = 380.dp)) {
                         items(targets, key = { it.id }) { album ->

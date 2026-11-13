@@ -9,7 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 object Prefs {
     private lateinit var sp: SharedPreferences
 
-    const val DEFAULT_ACCENT = 0xFF7C5CFF.toInt()
+    const val DEFAULT_ACCENT = 0xFF23295D.toInt()
     val TABS = listOf("Photos", "Albums", "Favorites", "Settings")
 
     private val _accent = mutableIntStateOf(DEFAULT_ACCENT)

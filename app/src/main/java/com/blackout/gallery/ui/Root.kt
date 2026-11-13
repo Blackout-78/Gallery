@@ -102,7 +102,7 @@ fun GalleryRoot() {
                         Modifier.fillMaxWidth().background(C.Card).navigationBarsPadding().padding(top = 12.dp, bottom = 14.dp),
                         horizontalArrangement = Arrangement.SpaceAround,
                     ) {
-                        BarAction(Icons.Outlined.VerifiedUser, "Clean info", tint = C.Accent) {
+                        BarAction(Icons.Outlined.VerifiedUser, "Clean info", tint = C.AccentInk) {
                             scope.launch {
                                 if (Actions.clean(context, GalleryState.items.filter { it.albumId in pickedAlbums })) pickedAlbums = emptySet()
                             }

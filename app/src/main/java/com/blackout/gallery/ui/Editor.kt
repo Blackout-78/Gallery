@@ -264,7 +264,7 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit) {
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Outlined.VerifiedUser, null, tint = C.Accent, modifier = Modifier.size(20.dp))
+            Icon(Icons.Outlined.VerifiedUser, null, tint = C.AccentInk, modifier = Modifier.size(20.dp))
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 Text("Remove hidden info on save", color = C.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Text("Location, device, owner and notes", color = C.Sub, fontSize = 12.sp)

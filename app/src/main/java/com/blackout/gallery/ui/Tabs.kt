@@ -206,7 +206,7 @@ fun AlbumScreen(albumId: Long, selection: Selection, onBack: () -> Unit, onOpen:
             IconButton(onClick = { Prefs.toggleBlur(listOf(albumId)); reveal = false }) {
                 Icon(if (blurred) Icons.Outlined.BlurOff else Icons.Outlined.BlurOn, if (blurred) "Stop blurring album" else "Blur album", tint = if (blurred) C.Accent else C.Text)
             }
-            IconButton(onClick = { scope.launch { Actions.clean(context, all) } }) { Icon(Icons.Outlined.VerifiedUser, "Remove hidden info from album", tint = C.Accent) }
+            IconButton(onClick = { scope.launch { Actions.clean(context, all) } }) { Icon(Icons.Outlined.VerifiedUser, "Remove hidden info from album", tint = C.AccentInk) }
             IconButton(onClick = { askDelete = true }) { Icon(Icons.Outlined.Delete, "Delete album", tint = C.Text) }
         }
         if (list.isEmpty()) EmptyNote("This album is empty")
