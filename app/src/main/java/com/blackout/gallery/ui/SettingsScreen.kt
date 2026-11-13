@@ -154,6 +154,10 @@ fun SettingsScreen(bottom: Dp, onFolders: () -> Unit = {}) {
             SettingRow("Sort", Prefs.sort.label, onClick = { choose = "sort" }) { Text("›", color = C.Sub, fontSize = 20.sp) }
             SettingRow("Videos", "Camera folder only", divider = false) {}
         }
+        Section("UPDATES") {
+            val ctx = LocalContext.current
+            SettingRow("Open GitHub Releases", "Opens in your browser", onClick = { com.blackout.gallery.Version.openReleases(ctx) }, divider = false) { Text("›", color = C.Sub, fontSize = 20.sp) }
+        }
         Text("Gallery works fully offline. It has no internet permission and collects nothing.",
             color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp))
         Text(com.blackout.gallery.Version.full, color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp))
