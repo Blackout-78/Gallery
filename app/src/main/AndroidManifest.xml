@@ -38,7 +38,7 @@
         <!-- A finished download: check for new photos even when Gallery is closed. -->
         <receiver
             android:name=".data.DownloadDoneReceiver"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
             </intent-filter>
