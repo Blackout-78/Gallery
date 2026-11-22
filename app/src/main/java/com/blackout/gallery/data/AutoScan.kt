@@ -90,6 +90,10 @@ object AutoScan {
 /** Android says a download finished: check for new photos right away, even if Gallery is closed. */
 class DownloadDoneReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != android.app.DownloadManager.ACTION_DOWNLOAD_COMPLETE) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (lastRun != 0L && now - lastRun < 30_000) return
+        lastRun = now
         val pending = goAsync()
         val app = context.applicationContext
         GalleryApp.appScope.launch {
@@ -100,5 +104,9 @@ class DownloadDoneReceiver : BroadcastReceiver() {
                 pending.finish()
             }
         }
+    }
+
+    private companion object {
+        @Volatile var lastRun = 0L
     }
 }

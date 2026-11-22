@@ -74,6 +74,10 @@ fun SettingsScreen(bottom: Dp, onFolders: () -> Unit = {}) {
             SettingRow("Remove hidden info when sharing", "Always on. Shared copies never carry it.") {
                 Switch(checked = true, onCheckedChange = null, enabled = false, colors = switchColors())
             }
+            var guard by remember { mutableStateOf(com.blackout.gallery.ScreenGuard.isOn(context)) }
+            SettingRow("Screen protection", "Blanks Gallery in the recent apps list and blocks screenshots and screen recording") {
+                Switch(checked = guard, onCheckedChange = { guard = it; com.blackout.gallery.ScreenGuard.set(context, it) }, colors = switchColors())
+            }
             SettingRow("Share at maximum level", "Shared copies are rebuilt from pixels and get random file names") {
                 Switch(checked = Prefs.shareMax, onCheckedChange = { Prefs.shareMax = it }, colors = switchColors())
             }

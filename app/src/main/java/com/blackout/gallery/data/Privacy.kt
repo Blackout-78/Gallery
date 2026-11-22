@@ -322,6 +322,10 @@ object Privacy {
             exif.saveAttributes()
             deepStrip(tmp)
             check(tmp.length() > 0) { "clean copy is empty" }
+            // Never call a WebP clean while it still has XMP or other extra blocks: stop before the original is touched.
+            if (item.mime.equals("image/webp", true)) {
+                check(Deep.scan(tmp.readBytes(), item.mime).none { it.title == "XMP data" || it.title == "Extra WebP data" }) { "the WebP still has extra info blocks" }
+            }
             val out = runCatching { resolver.openOutputStream(item.uri, "wt") }.getOrNull()
                 ?: resolver.openOutputStream(item.uri, "w")
                 ?: error("can't write to the photo")

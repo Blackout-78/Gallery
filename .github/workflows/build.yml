@@ -57,6 +57,10 @@ jobs:
           ./gradlew assembleRelease -PbuildNumber=${{ github.run_number }} --no-daemon
           cp app/build/outputs/apk/release/app-release.apk "Gallery-build-${{ github.run_number }}.apk"
 
+      - name: Remove the signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
+
       - name: Write what's new
         env:
           GH_TOKEN: ${{ github.token }}

@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        ScreenGuard.apply(this)
         MediaAccess.asker = { s ->
             val d = CompletableDeferred<Boolean>()
             waiting?.complete(false)
@@ -76,7 +77,7 @@ class MainActivity : ComponentActivity() {
     // Tapping the notification brings the progress box back.
     private fun showCleanIfAsked(intent: Intent?) {
         // Another app (like Camera) asked to open a photo: show it in the viewer.
-        if (intent?.action == Intent.ACTION_VIEW) intent.data?.let { u ->
+        if (intent?.action == Intent.ACTION_VIEW) intent.data?.takeIf { it.authority == "media" }?.let { u ->
             runCatching { android.content.ContentUris.parseId(u) }.getOrNull()?.takeIf { it > 0 }
                 ?.let { com.blackout.gallery.ui.OpenRequest.id = it }
             intent.action = null

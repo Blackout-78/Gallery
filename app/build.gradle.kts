@@ -37,6 +37,9 @@ android {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (keystorePath == null && System.getenv("CI") == "true") {
+                throw GradleException("Release signing key is missing in CI (SIGNING_STORE_FILE not set). Refusing to sign with the debug key.")
+            }
             signingConfig = if (keystorePath != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }

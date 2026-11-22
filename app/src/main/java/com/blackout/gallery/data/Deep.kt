@@ -22,16 +22,18 @@ object Deep {
         when {
             isJpeg(bytes) -> scanJpeg(bytes, out)
             isPng(bytes) -> scanPng(bytes, out)
+            isWebp(bytes) -> scanWebp(bytes, out)
         }
         val found = phoneWords.filter { contains(bytes, it) }
         if (found.isNotEmpty()) out += Finding("Phone name in file", found.joinToString(", "))
         return out
     }
 
-    /** Rebuilds the file keeping only what's needed to show the picture. Null if it isn't a JPEG or PNG we can read. */
+    /** Rebuilds the file keeping only what's needed to show the picture. Null if it isn't a JPEG, PNG or WebP we can read. */
     fun strip(bytes: ByteArray): ByteArray? = when {
         isJpeg(bytes) -> stripJpeg(bytes)
         isPng(bytes) -> stripPng(bytes)
+        isWebp(bytes) -> stripWebp(bytes)
         else -> null
     }
 
@@ -130,8 +132,14 @@ object Deep {
         return out.toByteArray()
     }
 
-    /** True if the JPEG still carries a photo-info (Exif) block. */
+    /** True if the JPEG still carries a photo-info (Exif) block, or the WebP still carries an EXIF or XMP chunk. */
     fun hasExif(b: ByteArray): Boolean {
+        if (isWebp(b)) {
+            var found = false
+            val ok = webpChunks(b) { type, _, _ -> if (type == "EXIF" || type == "XMP ") found = true }
+            // A WebP we can't read cannot be called clean.
+            return found || !ok
+        }
         val parts = parseJpeg(b) ?: return false
         return parts.segs.any { it.marker == 0xE1 && startsWith(b, it.start + 4, "Exif") }
     }
@@ -173,7 +181,11 @@ object Deep {
                 out += if (extra > 0) "Data after the picture · ${size(extra)}" else "Nothing after the picture"
             }
             isPng(b) -> pngChunks(b) { type, start, end -> out += "PNG $type · ${size(end - start)}" }
-            else -> out += "Not a JPEG or PNG · ${size(b.size)}"
+            isWebp(b) -> {
+                val ok = webpChunks(b) { type, start, end -> out += "WebP ${type.trim()} · ${size(end - start)}" }
+                if (!ok) out += "Couldn't read this file's layout"
+            }
+            else -> out += "Not a JPEG, PNG or WebP · ${size(b.size)}"
         }
         return out.distinct().let { list -> list.filterNot { it.startsWith("Compression codes") } + list.filter { it.startsWith("Compression codes") }.take(1) }
     }
@@ -225,6 +237,56 @@ object Deep {
         out.write(b, 0, 8)
         val ok = pngChunks(b) { type, start, end -> if (type in PNG_KEEP) out.write(b, start, end - start) }
         return if (ok) out.toByteArray() else null
+    }
+
+    // ---------- WebP ----------
+    private fun isWebp(b: ByteArray) = b.size > 12 && startsWith(b, 0, "RIFF") && startsWith(b, 8, "WEBP")
+    /** Chunks that show the picture, plus EXIF (cleaned of private tags first, and needed for rotation). XMP and anything else is dropped. */
+    private val WEBP_KEEP = setOf("VP8 ", "VP8L", "VP8X", "ALPH", "ANIM", "ANMF", "ICCP", "EXIF")
+
+    private fun u32le(b: ByteArray, i: Int) = (b[i].toLong() and 0xFF) or ((b[i + 1].toLong() and 0xFF) shl 8) or
+        ((b[i + 2].toLong() and 0xFF) shl 16) or ((b[i + 3].toLong() and 0xFF) shl 24)
+
+    /** Walks the top-level WebP chunks. [start, end) includes the 8-byte header and padding. False if the layout is damaged. */
+    private inline fun webpChunks(b: ByteArray, each: (type: String, start: Int, end: Int) -> Unit): Boolean {
+        val limit = minOf(b.size.toLong(), 8 + u32le(b, 4)).toInt()
+        var i = 12
+        while (i + 8 <= limit) {
+            val len = u32le(b, i + 4)
+            val end = i + 8 + len + (len and 1)
+            if (end > limit + 1 || end > b.size + 1) return false
+            val e = minOf(end, b.size.toLong()).toInt()
+            each(String(b, i, 4, Charsets.ISO_8859_1), i, e)
+            i = e
+        }
+        return i >= limit
+    }
+
+    private fun scanWebp(b: ByteArray, out: MutableList<Finding>) {
+        webpChunks(b) { type, start, end ->
+            when {
+                type == "XMP " -> out += Finding("XMP data", "Extra photo info block (${(end - start) / 1024 + 1} KB)")
+                type !in WEBP_KEEP -> out += Finding("Extra WebP data", type.trim())
+            }
+        }
+    }
+
+    private fun stripWebp(b: ByteArray): ByteArray? {
+        val body = ByteArrayOutputStream(b.size)
+        val ok = webpChunks(b) { type, start, end ->
+            if (type in WEBP_KEEP) {
+                val chunk = b.copyOfRange(start, end)
+                // The extended header lists which blocks exist: clear the XMP flag.
+                if (type == "VP8X" && chunk.size > 8) chunk[8] = (chunk[8].toInt() and 0x04.inv()).toByte()
+                body.write(chunk)
+            }
+        }
+        if (!ok) return null
+        val size = 4 + body.size()
+        val head = byteArrayOf('R'.code.toByte(), 'I'.code.toByte(), 'F'.code.toByte(), 'F'.code.toByte(),
+            size.toByte(), (size shr 8).toByte(), (size shr 16).toByte(), (size shr 24).toByte(),
+            'W'.code.toByte(), 'E'.code.toByte(), 'B'.code.toByte(), 'P'.code.toByte())
+        return head + body.toByteArray()
     }
 
     // ---------- text search ----------

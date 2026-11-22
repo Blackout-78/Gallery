@@ -12,3 +12,11 @@
 *.aab
 *.keystore
 *.jks
+*.p12
+*.pfx
+*.pem
+*.key
+.env
+KEYSTORE_*.txt
+github-secrets*.txt
+keystore.properties
